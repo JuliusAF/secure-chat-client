@@ -6,9 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MEGABYTE 5
+#define KILOBYTE 1024
 #define MESSAGE_MAX 200
-#define USERNAME_MAX 18
+#define USERNAME_MAX 20
 #define PASSWORD_MAX 24
 
 enum command_type {
@@ -27,31 +27,32 @@ typedef struct inputline {
 
   union {
     struct {
-      char username[USERNAME_MAX+1];
-      char password[PASSWORD_MAX+1];
-    } login;
+      char *username;
+      char *password;
+    } acc_details;
 
     struct {
-      char username[USERNAME_MAX+1];
-      char message[MESSAGE_MAX+1];
+      char *username;
+      char *message;
     } privmsg;
 
     struct {
-      char message[MESSAGE_MAX+1];
+      char *message;
     } pubmsg;
-
-    struct {
-      char username[USERNAME_MAX+1];
-      char password[PASSWORD_MAX+1];
-    } rgster;
   };
 } command_t;
 
-char* read_input(int fd);
-char* trim_front_whitespace(char* input);
-int trim_back_whitespace(char* input);
-command_t* construct_command_node(char* input);
-command_t* parse_input(char* input);
+char *read_input(int fd);
+char *trim_front_whitespace(char *input);
+int trim_back_whitespace(char *input);
+void make_error(command_t *node, char *s);
+command_t *make_exit(char* input);
+command_t *make_login(char *input);
+command_t *make_privmsg(char *input);
+command_t *make_pubmsg(char *input);
+command_t *make_register(char *input);
+command_t *make_users(char *input);
+command_t *parse_input(char *input);
 
 
 #endif

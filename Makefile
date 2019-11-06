@@ -1,8 +1,8 @@
 SERVER_SOURCES = src/server.c
 SERVER_HEADERS =
 
-CLIENT_SOURCES = src/client.c src/parser.c
-CLIENT_HEADERS = src/parser.h
+CLIENT_SOURCES = src/client.c src/parser.c src/safe_wrappers.c
+CLIENT_HEADERS = src/parser.h src/safe_wrappers.h
 
 TARGETS = server client
 META = Makefile README.md group.txt
