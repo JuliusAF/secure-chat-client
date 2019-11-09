@@ -23,7 +23,6 @@ enum command_type {
 
 typedef struct inputline {
   enum command_type command;
-  char* error_message;
 
   union {
     struct {
@@ -36,9 +35,9 @@ typedef struct inputline {
       char *message;
     } privmsg;
 
-    struct {
-      char *message;
-    } pubmsg;
+    char *message;
+
+    char* error_message;
   };
 } command_t;
 
@@ -53,6 +52,7 @@ command_t *make_pubmsg(char *input);
 command_t *make_register(char *input);
 command_t *make_users(char *input);
 command_t *parse_input(char *input);
+void free_node(command_t *node);
 
 
 #endif

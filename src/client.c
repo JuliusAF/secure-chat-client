@@ -8,13 +8,45 @@ int main( int argc, const char* argv[] )
 {
 	printf( "\nHello World\n\n" );
 
-	printf("1");
   char* input = read_input(STDIN_FILENO);
-	printf("2");
 	command_t *node = parse_input(input);
-	printf("3");
-	char *s = node->error_message;
-	//printf("error message: %s \n", s);
+	if(node == NULL) {
+		printf("wtf \n");
+		free(node);
+		return 0;
+	}
+
+	switch(node->command) {
+    case COMMAND_ERROR:
+      printf("error message: %s \n", node->error_message);
+      break;
+    case COMMAND_LOGIN:
+      printf("login, username: %s \n", node->acc_details.username);
+      printf("login, password: %s \n", node->acc_details.password);
+      break;
+    case COMMAND_REGISTER:
+      printf("register, username: %s \n", node->acc_details.username);
+      printf("register, password: %s \n", node->acc_details.password);
+      break;
+    case COMMAND_PUBMSG:
+      printf("public message: %s \n", node->message);
+      break;
+    case COMMAND_PRIVMSG:
+      printf("private message: %s \n", node->privmsg.message);
+    	printf("private message, username: %s \n", node->privmsg.username);
+      break;
+		case COMMAND_EXIT:
+			printf("exit \n");
+			break;
+		case COMMAND_USERS:
+			printf("users \n");
+			break;
+    default:
+      break;
+	  }
+	free_node(node);
+	free(input);
+		//free(node);
   //n = read(STDIN_FILENO, buf, sizeof(buf));
   /*input = trim_front_whitespace(input);
   int size = trim_back_whitespace(input);
@@ -33,7 +65,7 @@ int main( int argc, const char* argv[] )
 	token++;
 	temp_size = strlen(token);
 	printf("token size: %d \n", temp_size);
-	/*if(strcmp(input, token) != 0)
+	if(strcmp(input, token) != 0)
 		input += strlen(token);
 	printf("The input2 string: %s \n", input);
 
