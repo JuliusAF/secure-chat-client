@@ -1,13 +1,18 @@
-SERVER_SOURCES = src/server.c
-SERVER_HEADERS =
+SERVER_SOURCES = src/server.c src/parser.c \
+								 src/safe_wrappers.c src/network.c
+SERVER_HEADERS = src/parser.h src/safe_wrappers.h \
+								 src/network.h
 
-CLIENT_SOURCES = src/client.c src/parser.c src/safe_wrappers.c
-CLIENT_HEADERS = src/parser.h src/safe_wrappers.h
+CLIENT_SOURCES = src/client.c src/parser.c src/safe_wrappers.c src/network.c
+CLIENT_HEADERS = src/parser.h src/safe_wrappers.h src/network.h
 
 TARGETS = server client
 META = Makefile README.md group.txt
 
 CFLAGS = -Wall -Wextra -std=gnu99 -g3
+LDFLAGS =
+LIBS = -lsqlite3
+
 CC = gcc
 
 .PHONY: all tarball clean
@@ -29,7 +34,7 @@ clean:
 	rm -f src/*.o
 
 server: $(SERVER_SOURCES:.c=.o)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(SERVER_SOURCES:.c=.o): $(SERVER_HEADERS)
 

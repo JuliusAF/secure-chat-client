@@ -2,80 +2,54 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 #include "parser.h"
+#include "network.h"
 
-int main( int argc, const char* argv[] )
-{
-	printf( "\nHello World\n\n" );
+int main( int argc, const char* argv[] ) {
+	fd_set selectfds, activefds;
+	command_t *node;
+	char *input;
+	unsigned short port;
+	int socketfd, maxfd;
 
-  char* input = read_input(STDIN_FILENO);
-	command_t *node = parse_input(input);
-	if(node == NULL) {
-		printf("wtf \n");
-		free(node);
-		return 0;
+	if (argc != 3) {
+		fprintf(stderr, "Incorrect number of arguments. Must be 2\n");
+		return EXIT_FAILURE;
+	}
+	else if (!is_digit(argv[2])) {
+		fprintf(stderr, "Port must be a number\n");
+		return EXIT_FAILURE;
 	}
 
-	switch(node->command) {
-    case COMMAND_ERROR:
-      printf("error message: %s \n", node->error_message);
-      break;
-    case COMMAND_LOGIN:
-      printf("login, username: %s \n", node->acc_details.username);
-      printf("login, password: %s \n", node->acc_details.password);
-      break;
-    case COMMAND_REGISTER:
-      printf("register, username: %s \n", node->acc_details.username);
-      printf("register, password: %s \n", node->acc_details.password);
-      break;
-    case COMMAND_PUBMSG:
-      printf("public message: %s \n", node->message);
-      break;
-    case COMMAND_PRIVMSG:
-      printf("private message: %s \n", node->privmsg.message);
-    	printf("private message, username: %s \n", node->privmsg.username);
-      break;
-		case COMMAND_EXIT:
-			printf("exit \n");
-			break;
-		case COMMAND_USERS:
-			printf("users \n");
-			break;
-    default:
-      break;
-	  }
-	free_node(node);
-	free(input);
-		//free(node);
-  //n = read(STDIN_FILENO, buf, sizeof(buf));
-  /*input = trim_front_whitespace(input);
-  int size = trim_back_whitespace(input);
-	size = strlen(input);
-  char* temp, *token;
-  const char delim[] = " \n\t\v";
-  temp = (char *) malloc(sizeof(char)*strlen(input)+1);
-  memcpy(temp, input, strlen(input)+1);
+	port = (unsigned short) atoi(argv[2]);
+	socketfd = client_connect(argv[1], port);
 
-  token = strtok(temp, delim);
-  int temp_size = strlen(temp);
-  printf("temp size: %d \n", temp_size);
-  printf("input size: %d \n", size);
-  printf("The input string: %s \n", input);
-  printf("The token string: %s \n", token);
-	token++;
-	temp_size = strlen(token);
-	printf("token size: %d \n", temp_size);
-	if(strcmp(input, token) != 0)
-		input += strlen(token);
-	printf("The input2 string: %s \n", input);
+	maxfd = (STDIN_FILENO > socketfd) ? STDIN_FILENO : socketfd;
+	FD_ZERO(&activefds);
+	FD_SET(STDIN_FILENO, &activefds);
+	FD_SET(socketfd, &activefds);
 
-	token = strtok(NULL, delim);
-	printf("The token2 string: %s \n", token);
-  printf("The temp2 string: %s \n", temp);
+	while (true) {
+		selectfds = activefds;
+		select(maxfd+1, &selectfds, NULL, NULL, NULL);
+		if (FD_ISSET(STDIN_FILENO, &selectfds)) {
+			input = read_input(STDIN_FILENO);
+			node = parse_input(input);
+			if(node != NULL && node->command != COMMAND_ERROR)
+				write(socketfd, input, strlen(input));
+			free(input);
+			free(node);
+		}
+		else if (FD_ISSET(socketfd, &selectfds)) {
+			input = read_input(socketfd);
+			printf("%s\n", input);
+			free(input);
+		}
+	}
 
-	if(strcmp(input,"/exit") != 0) {
-		printf("oh no \n");
-	}*/
+	printf("max fd: %d\n", FD_SETSIZE);
 
+	close(socketfd);
 	return 0;
 }

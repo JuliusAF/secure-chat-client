@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define KILOBYTE 1024
 #define MESSAGE_MAX 200
@@ -44,6 +45,7 @@ typedef struct inputline {
 char *read_input(int fd);
 char *trim_front_whitespace(char *input);
 int trim_back_whitespace(char *input);
+bool is_digit(const char *s);
 void make_error(command_t *node, char *s);
 command_t *make_exit(char* input);
 command_t *make_login(char *input);
