@@ -4,19 +4,26 @@
 #include <sys/select.h>
 #include <stdbool.h>
 #include <sqlite3.h>
+#include <time.h>
 #include "parser.h"
 #include "network.h"
+#include "database.h"
 #include "safe_wrappers.h"
 
 #define MAX_CLIENTS 30
 
 void worker(int connfd, int from_parent[2], int to_parent[2]) {
 	fd_set selectfds, activefds;
-	char *input, *username;
-	int maxfd;
+	char *input, *username = NULL, pipe_input[16];
+	int maxfd, bytes_read;
+	time_t t;
+	struct tm *tmp;
+	command_t *node = NULL;
 
+	input = (char *) safe_malloc(sizeof(char) * MAX_PACKET_SIZE+1);
 	close(from_parent[1]);
 	close(to_parent[0]);
+
 	maxfd = (connfd > from_parent[0]) ? connfd : from_parent[0];
 	FD_ZERO(&activefds);
 	FD_SET(connfd, &activefds);
@@ -24,22 +31,47 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 
 	while (true) {
 		selectfds = activefds;
-		select(maxfd, &selectfds, NULL, NULL, NULL);
+		select(maxfd+1, &selectfds, NULL, NULL, NULL);
 
+		if (FD_ISSET(connfd, &selectfds)) {
+			bytes_read = read(connfd, input, MAX_PACKET_SIZE);
+			if (bytes_read < 0) {
+				perror("failed to read bytes");
+				continue;
+			}
+			else if (bytes_read == 0) {
+				strcpy(pipe_input, "Closed");
+				write(to_parent[1], pipe_input, strlen(pipe_input)+1);
+				break;
+			}
+			input[bytes_read] = '\0';
+			node = parse_input(input);
+
+			free_node(node);
+			strcpy(pipe_input, "Updated");
+			write(to_parent[1], pipe_input, strlen(pipe_input)+1);
+		}
+		else if (FD_ISSET(from_parent[0], &selectfds)) {
+			read(from_parent[0], pipe_input, 15);
+			if(strcmp(pipe_input, "Updated") == 0) {
+				//write();
+			}
+		}
 	}
-
+	close(from_parent[0]);
+	close(to_parent[1]);
 	free(input);
 	free(username);
 }
 
-int first_free_pipe(bool *b) {
+static int first_free_pipe(bool *b) {
 	for(int i = 0; i < MAX_CLIENTS; i++)
 		if(!b[i])
 			return i;
 	return -1;
 }
 
-int pipe_index(int *pipes, int fd) {
+static int pipe_index(int *pipes, int fd) {
 	for(int i = 0; i < MAX_CLIENTS; i++)
 		if(pipes[i*2] == fd)
 			return i;
@@ -51,10 +83,10 @@ int main( int argc, const char* argv[] ) {
 	char pipe_input[16];
 	unsigned short port;
 	int serverfd, connfd, free_pipe, to_child[60], from_child[60],
-	bytes_read, current_pipe, write_pipe;
+			bytes_read, current_pipe, rc;
 	bool active_pipes[30] = {false};
 	pid_t pid;
-	//sqlite3 *db;
+	sqlite3 *db;
 
 	if (argc != 2) {
 		fprintf(stderr, "Incorrect number of arguments. Must be 1\n");
@@ -67,6 +99,17 @@ int main( int argc, const char* argv[] ) {
 
 	port = (unsigned short) atoi(argv[1]);
 	serverfd = create_server_socket(port);
+
+	rc = sqlite3_open("chat.db", &db);
+
+	if (rc != SQLITE_OK) {
+			fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
+			sqlite3_close(db);
+			close(serverfd);
+			return 1;
+	}
+
+	initialize_database(db);
 
 	FD_ZERO(&activefds);
 	FD_SET(serverfd, &activefds);
@@ -85,17 +128,18 @@ int main( int argc, const char* argv[] ) {
 
 					if (free_pipe < 0) {
 						fprintf(stderr, "Maximum clients reached\n");
+						write(connfd, "Maximum no of clients exceeded", 30);
 						close(connfd);
 						continue;
 					}
 
 					if (pipe(to_child + free_pipe*2) < 0) {
-						perror("failed to create to child pipe");
+						perror("failed to create to_child pipe");
 						close(connfd);
 						continue;
 					}
 					else if (pipe(from_child + free_pipe*2) < 0) {
-						perror("failed to create from child pipe");
+						perror("failed to create from_child pipe");
 						close(to_child[free_pipe*2]);
 						close(to_child[free_pipe*2+1]);
 						close(connfd);
@@ -109,7 +153,7 @@ int main( int argc, const char* argv[] ) {
 						close(to_child[free_pipe*2+1]);
 						close(from_child[free_pipe*2]);
 					}
-					else if (pid == 0) {
+					if (pid == 0) {
 						worker(connfd, to_child + free_pipe*2, from_child + free_pipe*2);
 						exit(0);
 					}
@@ -121,7 +165,6 @@ int main( int argc, const char* argv[] ) {
 				}
 				else {
 					current_pipe = pipe_index(from_child, i);
-					write_pipe = to_child[current_pipe*2+1];
 					bytes_read = read(i, pipe_input, 15);
 
 					if (bytes_read == 0 ||
@@ -129,16 +172,14 @@ int main( int argc, const char* argv[] ) {
 							strcmp(pipe_input, "Closed") == 0) {
 						active_pipes[current_pipe] = false;
 						close(i);
-						close(write_pipe);
+						close(to_child[current_pipe*2+1]);
 						FD_CLR(i, &activefds);
 					}
 					else {
 						strcpy(pipe_input, "Updated");
-						for (int i = 0; i < MAX_CLIENTS; i++) {
-							if (active_pipes[i]) {
-								write_pipe = to_child[(i*2)+1];
-								write(write_pipe, pipe_input, 15);
-							}
+						for (int j = 0; j < MAX_CLIENTS; j++) {
+							if (active_pipes[j])
+								write(to_child[j*2+1], pipe_input, 15);
 						}
 					}
 				}

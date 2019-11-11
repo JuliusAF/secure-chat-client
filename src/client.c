@@ -9,9 +9,9 @@
 int main( int argc, const char* argv[] ) {
 	fd_set selectfds, activefds;
 	command_t *node;
-	char *input;
+	char *input, *server_output;
 	unsigned short port;
-	int socketfd, maxfd;
+	int socketfd, maxfd, bytes_read;
 
 	if (argc != 3) {
 		fprintf(stderr, "Incorrect number of arguments. Must be 2\n");
@@ -24,6 +24,7 @@ int main( int argc, const char* argv[] ) {
 
 	port = (unsigned short) atoi(argv[2]);
 	socketfd = client_connect(argv[1], port);
+	server_output = (char *) malloc(sizeof(char) * MAX_PACKET_SIZE+1);
 
 	maxfd = (STDIN_FILENO > socketfd) ? STDIN_FILENO : socketfd;
 	FD_ZERO(&activefds);
@@ -37,19 +38,25 @@ int main( int argc, const char* argv[] ) {
 			input = read_input(STDIN_FILENO);
 			node = parse_input(input);
 			if(node != NULL && node->command != COMMAND_ERROR)
-				write(socketfd, input, strlen(input));
+				write(socketfd, input, strlen(input)+1);
 			free(input);
 			free(node);
 		}
 		else if (FD_ISSET(socketfd, &selectfds)) {
-			input = read_input(socketfd);
-			printf("%s\n", input);
-			free(input);
+			bytes_read = read(socketfd, server_output, MAX_PACKET_SIZE);
+			if (bytes_read < 0) {
+				perror("failed to read from server socket");
+				continue;
+			}
+			else if (bytes_read == 0) {
+				printf("Lost connection to server. Closing client.\n");
+				break;
+			}
+			printf("%s\n", server_output);
 		}
 	}
 
-	printf("max fd: %d\n", FD_SETSIZE);
-
+	free(input);
 	close(socketfd);
 	return 0;
 }

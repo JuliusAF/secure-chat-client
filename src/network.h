@@ -3,6 +3,8 @@
 
 #include "parser.h"
 
+#define MAX_PACKET_SIZE 512
+
 int create_server_socket(unsigned short port);
 int client_connect(const char *hostname, unsigned short port);
 int accept_connection(int serverfd);
