@@ -60,7 +60,7 @@ int main( int argc, const char* argv[] ) {
 		close(serverfd);
 		return 1;
 	}
-	
+
 	sqlite3_close(db);
 
 	FD_ZERO(&activefds);
@@ -121,17 +121,16 @@ int main( int argc, const char* argv[] ) {
 
 					if (bytes_read == 0 ||
 							pipe_input == NULL ||
-							strcmp(pipe_input, "Closed") == 0) {
+							strcmp(pipe_input, S_MSG_CLOSE) == 0) {
 						active_pipes[current_pipe] = false;
 						close(i);
 						close(to_child[current_pipe*2+1]);
 						FD_CLR(i, &activefds);
 					}
 					else {
-						strcpy(pipe_input, "Updated");
 						for (int j = 0; j < MAX_CLIENTS; j++) {
 							if (active_pipes[j])
-								write(to_child[j*2+1], pipe_input, 15);
+								write(to_child[j*2+1], S_MSG_UPDATE, strlen(S_MSG_UPDATE)+1);
 						}
 					}
 				}

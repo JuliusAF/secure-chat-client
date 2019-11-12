@@ -6,6 +6,13 @@
 #include "parser.h"
 #include "network.h"
 
+/* I can not get input from output redirection to work, which means that
+the test.py file provided also does not work. The problem is that I exit my program
+when stdin reaches end of file, and when input is entered from a file,
+I'm guessing exiting of the program happens too fast to catch
+the data sent from the server since they are all
+in the same loop. */
+
 int read_stdin(char *buffer, int size) {
 	int bytes_read = 0, index = 0;
 	char c;
@@ -17,21 +24,19 @@ int read_stdin(char *buffer, int size) {
 	while (read(STDIN_FILENO, &c, 1) == 1 && index < size - 1) {
 		bytes_read++;
 
-
 		if (c == '\n') {
 			buffer[index] = '\0';
 			return bytes_read;
 		}
-
 		buffer[index] = c;
 		index++;
 	}
 
 	buffer[index] = '\0';
 	return bytes_read;
-
 }
 
+/* Very rudimentary because I do not yet have a fleshed out protocl.*/
 int main( int argc, const char* argv[] ) {
 	fd_set selectfds, activefds;
 	command_t *node;
@@ -62,25 +67,26 @@ int main( int argc, const char* argv[] ) {
 		selectfds = activefds;
 		select(maxfd+1, &selectfds, NULL, NULL, NULL);
 
-		printf("select return: %d times\n", loop);
 		if (FD_ISSET(STDIN_FILENO, &selectfds)) {
 			bytes_read = read_stdin(input1, sizeof(input1));
-			if (bytes_read == 0) {
+			if (bytes_read == 0)
 				break;
-			}
-
+		
 			strcpy(input, input1);
 			node = parse_input(input);
 
-			printf("node type: %d\n", node->command);
-			if (node != NULL && node->command != COMMAND_ERROR)
+			if(node != NULL && node->command == COMMAND_ERROR)
+				printf("error: %s\n", node->error_message);
+			else if (node != NULL && node->command != COMMAND_ERROR)
 				write(socketfd, input, strlen(input)+1);
+
 			if (node != NULL && node->command == COMMAND_EXIT) {
 				free(node);
 				break;
 			}
 			free(node);
 		}
+
 		if (FD_ISSET(socketfd, &selectfds)) {
 			bytes_read = read(socketfd, server_output, MAX_PACKET_SIZE);
 			if (bytes_read < 0) {

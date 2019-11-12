@@ -11,14 +11,24 @@
 #include "safe_wrappers.h"
 #include "database.h"
 
+static client_t *initialize_client_info(int connfd) {
+  client_t *c = safe_malloc(sizeof(client_t));
+
+  c->connfd = connfd;
+  strcpy(c->username, "");
+  c->last_updated = 0;
+
+  return c;
+}
+
 void worker(int connfd, int from_parent[2], int to_parent[2]) {
 	fd_set selectfds, activefds;
-	char *input, pipe_input[16], username[USERNAME_MAX+1] = "";
+	char *input, pipe_input[16];
 	int maxfd, bytes_read, rc;
-	time_t t;
 	command_t *node = NULL;
+  client_t *client_info;
 
-  t = 0;
+  client_info = initialize_client_info(connfd);
   input = (char *) safe_malloc(sizeof(char) * MAX_PACKET_SIZE+1);
 	close(from_parent[1]);
 	close(to_parent[0]);
@@ -40,50 +50,44 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 			}
 			else if (bytes_read == 0) {
         strcpy(pipe_input, "Closed");
-				write(to_parent[1], pipe_input, strlen(pipe_input)+1);
-        handle_db_exit(username);
+				write(to_parent[1], S_MSG_CLOSE, strlen(S_MSG_CLOSE)+1);
+        handle_db_exit(client_info);
         printf("lost connection\n");
         close(connfd);
 				break;
 			}
 
 			input[bytes_read] = '\0';
-      printf("server user input: %s\n", input);
 			node = parse_input(input);
       if (node == NULL)
         continue;
 
-      rc = handle_client_input(node, username, connfd);
-      if (rc == 1 || rc == 2) {
-        fetch_db_message(username, t, connfd);
-        t = time(NULL);
-      }
-      if (rc == 3 || rc == 4) {
-        strcpy(pipe_input, "Updated");
-  			write(to_parent[1], pipe_input, strlen(pipe_input)+1);
-      }
-      else if (rc == 6) {
-        strcpy(pipe_input, "Closed");
-  			write(to_parent[1], pipe_input, strlen(pipe_input)+1);
-        close(connfd);
+      rc = handle_client_input(node, client_info, to_parent[1]);
+      if (rc == COMMAND_EXIT) {
+        free_node(node);
         break;
       }
+
 			free_node(node);
 		}
 		if (FD_ISSET(from_parent[0], &selectfds)) {
 			read(from_parent[0], pipe_input, 15);
-			if(strcmp(pipe_input, "Updated") == 0) {
-        fetch_db_message(username, t, connfd);
-        t = time(NULL);
+			if(strcmp(pipe_input, S_MSG_UPDATE) == 0) {
+        fetch_db_message(client_info);
 			}
 		}
 	}
 	close(from_parent[0]);
 	close(to_parent[1]);
+  free(client_info);
 	free(input);
 }
 
-int handle_client_input(command_t *node, char *user, int connfd) {
+/* This function handles the input from the client. Right now plain text is sent
+over the socket and is parsed again using the same parsing function. Once the protocol
+is finished, the packet sent from the client will be deserialized. The returned structure is
+still of type command_t.*/
+int handle_client_input(command_t *node, client_t *client_info, int pipefd) {
   int rc;
 
   if (node == NULL)
@@ -91,22 +95,35 @@ int handle_client_input(command_t *node, char *user, int connfd) {
 
   switch (node->command) {
     case COMMAND_LOGIN:
-      rc = handle_db_login(node, user, connfd);
+      rc = handle_db_login(node, client_info);
+      if (rc == COMMAND_LOGIN) {
+        fetch_db_message(client_info);
+      }
       break;
     case COMMAND_REGISTER:
-      rc = handle_db_register(node, user, connfd);
+      rc = handle_db_register(node, client_info);
+      if (rc == COMMAND_REGISTER) {
+        fetch_db_message(client_info);
+      }
       break;
     case COMMAND_PRIVMSG:
       //rc = handle_db_privmsg(node, user, connfd);
       break;
     case COMMAND_PUBMSG:
-      rc = handle_db_pubmsg(node, user, connfd);
+      rc = handle_db_pubmsg(node, client_info);
+      if (rc == COMMAND_PUBMSG) {
+        write(pipefd, S_MSG_UPDATE, strlen(S_MSG_UPDATE)+1);
+      }
       break;
     case COMMAND_USERS:
       //rc = handle_db_users(user, connfd);
       break;
     case COMMAND_EXIT:
-      rc = handle_db_exit(user);
+      rc = handle_db_exit(client_info);
+      if (rc == COMMAND_EXIT) {
+        write(pipefd, S_MSG_CLOSE, strlen(S_MSG_CLOSE)+1);
+        close(client_info->connfd);
+      }
       break;
     default:
       break;

@@ -9,24 +9,11 @@
 
 static const char delim[] = " \n\t\v";
 
-char *read_input(int fd) {
-  char *input = NULL;
-  char buffer[KILOBYTE];
-  int bytes_read, input_size = 0;
-
-  do {
-    bytes_read = read(fd, buffer, sizeof(buffer));
-    if (bytes_read < 0)
-      perror("Failed to read input");
-    else if (fd == STDIN_FILENO && bytes_read == 0)
-      exit(0);
-    input = safe_realloc(input, input_size+bytes_read+1);
-    memcpy(input+input_size, &buffer, bytes_read);
-    input_size += bytes_read;
-  } while (bytes_read == KILOBYTE && buffer[KILOBYTE-1] != '\n');
-
-  input[input_size] = '\0';
-  return input;
+bool is_digit(const char *s) {
+  for (size_t i = 0; i < strlen(s); i++)
+    if(!isdigit(s[i]))
+      return false;
+  return true;
 }
 
 char* trim_front_whitespace(char* input) {
@@ -44,7 +31,7 @@ char* trim_front_whitespace(char* input) {
 int trim_back_whitespace(char* input) {
   int input_size;
 
-  if (!input)
+  if (input == NULL)
     return -1;
 
   input_size = strlen(input);
@@ -53,13 +40,6 @@ int trim_back_whitespace(char* input) {
     input_size--;
   input[input_size] = '\0';
   return input_size;
-}
-
-bool is_digit(const char *s) {
-  for (size_t i = 0; i < strlen(s); i++)
-    if(!isdigit(s[i]))
-      return false;
-  return true;
 }
 
 static bool is_message_legal(char *input) {
@@ -72,6 +52,8 @@ static bool is_message_legal(char *input) {
   return true;
 }
 
+/* checks if a string conforms to the syntax restrictions of tokens
+as described in the manual*/
 static bool is_token_legal(char *input) {
   if (input == NULL)
     return false;
@@ -87,7 +69,11 @@ void make_error(command_t *node, char *s) {
   node->error_message = safe_strdup(s);
 }
 
-command_t *make_exit(char *input) {
+/* The following functions are helper functions to
+parse_input() that error check user input and if there are no errors,
+it places the fields belonging to some input into a node of type command_t*/
+
+command_t *make_exit_node(char *input) {
   command_t *node = safe_malloc(sizeof(command_t));
 
   if (strcmp(input,"/exit") != 0)
@@ -97,7 +83,7 @@ command_t *make_exit(char *input) {
   return node;
 }
 
-command_t* make_login(char *input) {
+command_t* make_login_node(char *input) {
   command_t *node = safe_malloc(sizeof(command_t));
   char *temp = malloc(sizeof(char) * (strlen(input)+1)),
   *token, *username, *password;
@@ -136,11 +122,23 @@ command_t* make_login(char *input) {
     free(username);
     free(password);
   }
+
   free(temp);
   return node;
 }
 
-command_t *make_privmsg(char *input) {
+command_t* make_register_node(char *input) {
+  command_t *node;
+  node = make_login_node(input);
+  /* register uses the same syntax and fields as login. Therefore only the type
+  has to be changed*/
+  if (node->command == COMMAND_LOGIN)
+    node->command = COMMAND_REGISTER;
+
+  return node;
+}
+
+command_t *make_privmsg_node(char *input) {
   int token_size;
   command_t *node = safe_malloc(sizeof(command_t));
   char *temp = safe_malloc(sizeof(char)*(strlen(input)+1)), *tmp_msg,
@@ -159,6 +157,8 @@ command_t *make_privmsg(char *input) {
   if (!is_token_legal(username))
     make_error(node, "Impossible recipient name");
   else {
+    /* increments the pointer of a copy of the input to the beginning of the message field.
+    The pointer is copied so that the original can be freed later */
     memcpy(temp, input, strlen(input)+1);
     tmp_msg = temp;
     tmp_msg += token_size;
@@ -175,12 +175,13 @@ command_t *make_privmsg(char *input) {
       node->privmsg.message = safe_strdup(tmp_msg);
     }
   }
+
   free(username);
   free(temp);
   return node;
 }
 
-command_t* make_pubmsg(char *input) {
+command_t* make_pubmsg_node(char *input) {
   command_t *node = safe_malloc(sizeof(command_t));
 
   if (!is_message_legal(input))
@@ -191,19 +192,11 @@ command_t* make_pubmsg(char *input) {
     node->command = COMMAND_PUBMSG;
     node->message = safe_strdup(input);
   }
+
   return node;
 }
 
-command_t* make_register(char *input) {
-  command_t *node;
-  node = make_login(input);
-  if (node->command == COMMAND_LOGIN) {
-    node->command = COMMAND_REGISTER;
-  }
-  return node;
-}
-
-command_t* make_users(char *input) {
+command_t* make_users_node(char *input) {
   command_t *node = safe_malloc(sizeof(command_t));
 
   if (strcmp(input,"/users") != 0)
@@ -211,6 +204,7 @@ command_t* make_users(char *input) {
   else {
     node->command = COMMAND_USERS;
   }
+
   return node;
 }
 
@@ -228,21 +222,71 @@ command_t *parse_input(char *input) {
   token = strtok(temp, delim);
 
   if (strcmp(token,"/exit") == 0)
-    node = make_exit(formatted_input);
+    node = make_exit_node(formatted_input);
   else if (strcmp(token,"/login") == 0)
-    node = make_login(formatted_input);
+    node = make_login_node(formatted_input);
   else if (strcmp(token,"/register") == 0)
-    node = make_register(formatted_input);
+    node = make_register_node(formatted_input);
   else if (strcmp(token,"/users") == 0)
-    node = make_users(formatted_input);
+    node = make_users_node(formatted_input);
   else if (token[0] == '@')
-    node = make_privmsg(formatted_input);
+    node = make_privmsg_node(formatted_input);
   else
-    node = make_pubmsg(formatted_input);
+    node = make_pubmsg_node(formatted_input);
+
+  if(!is_node_legal(node)) {
+    free_node(node);
+    node = NULL;
+  }
+
   free(temp);
   return node;
 }
 
+/* checks if all the data fields ar enot null. If they are strdup probably failed*/
+bool is_node_legal(command_t *node) {
+  if (node == NULL)
+    return false;
+
+  switch (node->command) {
+    case COMMAND_EXIT:
+      break;
+    case COMMAND_LOGIN:
+      if (node->acc_details.username == NULL)
+        return false;
+      if (node->acc_details.password == NULL)
+        return false;
+      break;
+    case COMMAND_REGISTER:
+      if (node->acc_details.username == NULL)
+        return false;
+      if (node->acc_details.password == NULL)
+        return false;
+      break;
+    case COMMAND_PRIVMSG:
+      if (node->privmsg.username == NULL)
+        return false;
+      if (node->privmsg.message == NULL)
+        return false;
+      break;
+    case COMMAND_PUBMSG:
+      if (node->message == NULL)
+        return false;
+      break;
+    case COMMAND_USERS:
+      break;
+    case COMMAND_ERROR:
+      if (node->error_message == NULL)
+        return false;
+      break;
+    default:
+      break;
+  }
+
+  return true;
+}
+
+/* Frees the individual parts of a node and then the node itself*/
 void free_node(command_t *node) {
   if (node == NULL)
     return;
@@ -269,5 +313,6 @@ void free_node(command_t *node) {
     default:
       break;
   }
+
   free(node);
 }
