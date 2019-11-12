@@ -13,5 +13,6 @@ int handle_db_privmsg(command_t *node, char *user, int connfd);
 int handle_db_pubmsg(command_t *node, char *user, int connfd);
 int handle_db_users(char *user, int connfd);
 int handle_db_exit(char *user);
+int fetch_db_message(char* user, time_t t, int connfd);
 
 #endif

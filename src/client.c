@@ -6,12 +6,38 @@
 #include "parser.h"
 #include "network.h"
 
+int read_stdin(char *buffer, int size) {
+	int bytes_read = 0, index = 0;
+	char c;
+
+	if (buffer == NULL || size == 0) {
+		return -1;
+	}
+
+	while (read(STDIN_FILENO, &c, 1) == 1 && index < size - 1) {
+		bytes_read++;
+
+
+		if (c == '\n') {
+			buffer[index] = '\0';
+			return bytes_read;
+		}
+
+		buffer[index] = c;
+		index++;
+	}
+
+	buffer[index] = '\0';
+	return bytes_read;
+
+}
+
 int main( int argc, const char* argv[] ) {
 	fd_set selectfds, activefds;
 	command_t *node;
-	char *input, *server_output;
+	char *input, *server_output, input1[500];
 	unsigned short port;
-	int socketfd, maxfd, bytes_read;
+	int socketfd, maxfd, bytes_read, loop = 0;
 
 	if (argc != 3) {
 		fprintf(stderr, "Incorrect number of arguments. Must be 2\n");
@@ -24,6 +50,7 @@ int main( int argc, const char* argv[] ) {
 
 	port = (unsigned short) atoi(argv[2]);
 	socketfd = client_connect(argv[1], port);
+	input = (char *) malloc(sizeof(char) * 501);
 	server_output = (char *) malloc(sizeof(char) * MAX_PACKET_SIZE+1);
 
 	maxfd = (STDIN_FILENO > socketfd) ? STDIN_FILENO : socketfd;
@@ -34,20 +61,27 @@ int main( int argc, const char* argv[] ) {
 	while (true) {
 		selectfds = activefds;
 		select(maxfd+1, &selectfds, NULL, NULL, NULL);
+
+		printf("select return: %d times\n", loop);
 		if (FD_ISSET(STDIN_FILENO, &selectfds)) {
-			input = read_input(STDIN_FILENO);
+			bytes_read = read_stdin(input1, sizeof(input1));
+			if (bytes_read == 0) {
+				break;
+			}
+
+			strcpy(input, input1);
 			node = parse_input(input);
 
+			printf("node type: %d\n", node->command);
 			if (node != NULL && node->command != COMMAND_ERROR)
 				write(socketfd, input, strlen(input)+1);
 			if (node != NULL && node->command == COMMAND_EXIT) {
 				free(node);
 				break;
 			}
-			free(input);
 			free(node);
 		}
-		else if (FD_ISSET(socketfd, &selectfds)) {
+		if (FD_ISSET(socketfd, &selectfds)) {
 			bytes_read = read(socketfd, server_output, MAX_PACKET_SIZE);
 			if (bytes_read < 0) {
 				perror("failed to read from server socket");
@@ -59,7 +93,9 @@ int main( int argc, const char* argv[] ) {
 			}
 			printf("%s\n", server_output);
 		}
+		loop++;
 	}
+	free(server_output);
 	free(input);
 	close(socketfd);
 	return 0;

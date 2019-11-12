@@ -1,3 +1,15 @@
+As it currently stands I tried only to get the required functionality for deadline
+A working. I did not manage to implement a proper networking protocol. Right now I
+am simply sending messages in plain text between server and client, and straight up
+parsing the input on both ends. The basic functionalities work if input through the
+terminal but I couldn't get automatic testing to work. If I exit the program after end
+of file I can not catch messages sent from the server in time.
+
+
+
+
+
+
 Network Protocol:
 
 The packets sent from client to server and from server to client are different.
@@ -8,11 +20,14 @@ For client to server communication, the client sends parsed input data to the se
 - Message = 200
 
 As such, the data part of the packet sent from client to server is a serialized unsigned char array with a fixed length of 252 bytes. The make up of the data is as follows:
-- bytes 0 to 7 contain the command invoked, written in plaintext:
-  - "LOGIN", "REGISTER", "USERS", "EXIT", "PRIVMSG", "PUBMSG"
-- bytes 8 to 27 contain the username
-- bytes 28 to 51 contain the password
-- bytes 52 to 251 contain the message
+- The first sizeof(int) bytes contain the code that corresponds to the type of message
+  that is being sent in the packet.
+- The next 21 bytes contain the username
+- the next 25 bytes contain the password
+- The next 201 bytes contain the message
+
+The chunks of data are always one byte larger than the sizes of their
+fields and should always contain a null terminator.
 
 Should a given input not fully occupy its respective field, the remainder of the bytes are initialized to null terminators.
 
