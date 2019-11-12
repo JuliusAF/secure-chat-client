@@ -37,8 +37,13 @@ int main( int argc, const char* argv[] ) {
 		if (FD_ISSET(STDIN_FILENO, &selectfds)) {
 			input = read_input(STDIN_FILENO);
 			node = parse_input(input);
-			if(node != NULL && node->command != COMMAND_ERROR)
+
+			if (node != NULL && node->command != COMMAND_ERROR)
 				write(socketfd, input, strlen(input)+1);
+			if (node != NULL && node->command == COMMAND_EXIT) {
+				free(node);
+				break;
+			}
 			free(input);
 			free(node);
 		}
@@ -55,7 +60,6 @@ int main( int argc, const char* argv[] ) {
 			printf("%s\n", server_output);
 		}
 	}
-
 	free(input);
 	close(socketfd);
 	return 0;

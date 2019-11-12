@@ -8,61 +8,8 @@
 #include "parser.h"
 #include "network.h"
 #include "database.h"
+#include "server_utilities.h"
 #include "safe_wrappers.h"
-
-#define MAX_CLIENTS 30
-
-void worker(int connfd, int from_parent[2], int to_parent[2]) {
-	fd_set selectfds, activefds;
-	char *input, *username = NULL, pipe_input[16];
-	int maxfd, bytes_read;
-	time_t t;
-	struct tm *tmp;
-	command_t *node = NULL;
-
-	input = (char *) safe_malloc(sizeof(char) * MAX_PACKET_SIZE+1);
-	close(from_parent[1]);
-	close(to_parent[0]);
-
-	maxfd = (connfd > from_parent[0]) ? connfd : from_parent[0];
-	FD_ZERO(&activefds);
-	FD_SET(connfd, &activefds);
-	FD_SET(from_parent[0], &activefds);
-
-	while (true) {
-		selectfds = activefds;
-		select(maxfd+1, &selectfds, NULL, NULL, NULL);
-
-		if (FD_ISSET(connfd, &selectfds)) {
-			bytes_read = read(connfd, input, MAX_PACKET_SIZE);
-			if (bytes_read < 0) {
-				perror("failed to read bytes");
-				continue;
-			}
-			else if (bytes_read == 0) {
-				strcpy(pipe_input, "Closed");
-				write(to_parent[1], pipe_input, strlen(pipe_input)+1);
-				break;
-			}
-			input[bytes_read] = '\0';
-			node = parse_input(input);
-
-			free_node(node);
-			strcpy(pipe_input, "Updated");
-			write(to_parent[1], pipe_input, strlen(pipe_input)+1);
-		}
-		else if (FD_ISSET(from_parent[0], &selectfds)) {
-			read(from_parent[0], pipe_input, 15);
-			if(strcmp(pipe_input, "Updated") == 0) {
-				//write();
-			}
-		}
-	}
-	close(from_parent[0]);
-	close(to_parent[1]);
-	free(input);
-	free(username);
-}
 
 static int first_free_pipe(bool *b) {
 	for(int i = 0; i < MAX_CLIENTS; i++)
@@ -100,16 +47,21 @@ int main( int argc, const char* argv[] ) {
 	port = (unsigned short) atoi(argv[1]);
 	serverfd = create_server_socket(port);
 
-	rc = sqlite3_open("chat.db", &db);
-
-	if (rc != SQLITE_OK) {
-			fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
-			sqlite3_close(db);
-			close(serverfd);
-			return 1;
+	db = open_database();
+  if (db == NULL) {
+		close(serverfd);
+		return 1;
 	}
 
-	initialize_database(db);
+	rc = initialize_database(db);
+	if (rc < 0) {
+		fprintf(stderr, "Failed to initialize database\n");
+		sqlite3_close(db);
+		close(serverfd);
+		return 1;
+	}
+	
+	sqlite3_close(db);
 
 	FD_ZERO(&activefds);
 	FD_SET(serverfd, &activefds);
@@ -186,7 +138,6 @@ int main( int argc, const char* argv[] ) {
 			}
 		}
 	}
-
 	close(serverfd);
 
 	return 0;

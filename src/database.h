@@ -3,7 +3,15 @@
 
 #include <stdbool.h>
 #include <sqlite3.h>
+#include "parser.h"
 
-void initialize_database(sqlite3 *db);
+sqlite3 *open_database(void);
+int initialize_database(sqlite3 *db);
+int handle_db_login(command_t *node, char *user, int connfd);
+int handle_db_register(command_t *node, char *user, int connfd);
+int handle_db_privmsg(command_t *node, char *user, int connfd);
+int handle_db_pubmsg(command_t *node, char *user, int connfd);
+int handle_db_users(char *user, int connfd);
+int handle_db_exit(char *user);
 
 #endif

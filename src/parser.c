@@ -156,7 +156,6 @@ command_t *make_privmsg(char *input) {
   }
 
   username = safe_strdup(token+1);
-
   if (!is_token_legal(username))
     make_error(node, "Impossible recipient name");
   else {
@@ -222,7 +221,7 @@ command_t *parse_input(char *input) {
 
   formatted_input = trim_front_whitespace(input);
   input_size = trim_back_whitespace(formatted_input);
-  if (!formatted_input || input_size < 1)
+  if (formatted_input == NULL || input_size < 1)
     return NULL;
   temp = (char *) malloc(sizeof(char) * (strlen(formatted_input)+1));
   memcpy(temp, formatted_input, strlen(formatted_input)+1);

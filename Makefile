@@ -1,8 +1,9 @@
 SERVER_SOURCES = src/server.c src/parser.c \
 								 src/safe_wrappers.c src/network.c \
-								 src/database.c
+								 src/database.c src/server_utilities.c
 SERVER_HEADERS = src/parser.h src/safe_wrappers.h \
-								 src/network.h src/database.h
+								 src/network.h src/database.h \
+								 src/server_utilities.h
 
 CLIENT_SOURCES = src/client.c src/parser.c src/safe_wrappers.c src/network.c
 CLIENT_HEADERS = src/parser.h src/safe_wrappers.h src/network.h
