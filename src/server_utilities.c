@@ -23,7 +23,7 @@ static client_t *initialize_client_info(int connfd) {
 
 void worker(int connfd, int from_parent[2], int to_parent[2]) {
 	fd_set selectfds, activefds;
-	char *input, pipe_input[16];
+	char *input, pipe_input[S_MSG_LEN+1];
 	int maxfd, bytes_read, rc;
 	command_t *node = NULL;
   client_t *client_info;
@@ -49,10 +49,8 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 				continue;
 			}
 			else if (bytes_read == 0) {
-        strcpy(pipe_input, "Closed");
-				write(to_parent[1], S_MSG_CLOSE, strlen(S_MSG_CLOSE)+1);
+				write(to_parent[1], S_MSG_CLOSE, S_MSG_LEN+1);
         handle_db_exit(client_info);
-        printf("lost connection\n");
         close(connfd);
 				break;
 			}
@@ -70,11 +68,13 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 
 			free_node(node);
 		}
+    /* very rudimentary right now. If the server notifies
+    the worker that the database has been updated, the worker
+    sends the client all the messages that occurred since it last did
+    so. */
 		if (FD_ISSET(from_parent[0], &selectfds)) {
-			read(from_parent[0], pipe_input, 15);
-			if(strcmp(pipe_input, S_MSG_UPDATE) == 0) {
-        fetch_db_message(client_info);
-			}
+			read(from_parent[0], pipe_input, S_MSG_LEN);
+      fetch_db_message(client_info);
 		}
 	}
 	close(from_parent[0]);
@@ -112,7 +112,7 @@ int handle_client_input(command_t *node, client_t *client_info, int pipefd) {
     case COMMAND_PUBMSG:
       rc = handle_db_pubmsg(node, client_info);
       if (rc == COMMAND_PUBMSG) {
-        write(pipefd, S_MSG_UPDATE, strlen(S_MSG_UPDATE)+1);
+        write(pipefd, S_MSG_UPDATE, S_MSG_LEN+1);
       }
       break;
     case COMMAND_USERS:
@@ -121,7 +121,7 @@ int handle_client_input(command_t *node, client_t *client_info, int pipefd) {
     case COMMAND_EXIT:
       rc = handle_db_exit(client_info);
       if (rc == COMMAND_EXIT) {
-        write(pipefd, S_MSG_CLOSE, strlen(S_MSG_CLOSE)+1);
+        write(pipefd, S_MSG_CLOSE, S_MSG_LEN+1);
         close(client_info->connfd);
       }
       break;

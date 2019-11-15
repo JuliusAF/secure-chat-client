@@ -29,7 +29,7 @@ PLANNED PROTOCOL:
 
 Each packet will contain a header of fixed size that includes the following:
 - Four bytes that act as an identification number for the packet
-- Four bytes to indicate the size of the data
+- Two bytes to indicate the size of the data
 - Four bytes that contain a checksum to error check the packet
 - Eight bytes that contain an identification string that specifies what the
   nature of the data in the packet is. This is different based on whether the packet

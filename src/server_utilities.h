@@ -6,8 +6,14 @@
 
 #define MAX_CLIENTS 30
 #define DATE_FORMAT "%Y-%m-%d %H:%M:%S"
-#define S_MSG_UPDATE "Updated"
+/* The server and workers communicate over the pipes.
+The communication between them, however, is very simple and
+there is no need for elaborate messages. The workers tell the server
+if their connection ended with "Closed" and the worker tell the server,
+and vice versa, if the databse has updated.*/
+#define S_MSG_UPDATE "Update"
 #define S_MSG_CLOSE "Closed"
+#define S_MSG_LEN 6
 
 typedef struct client_info {
   int connfd;

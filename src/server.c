@@ -11,6 +11,9 @@
 #include "server_utilities.h"
 #include "safe_wrappers.h"
 
+/* returns the index of the first element
+that is labelled false. This index is the first free location
+in to_ and from_child where a pipe can be created with pipe()*/
 static int first_free_pipe(bool *b) {
 	for(int i = 0; i < MAX_CLIENTS; i++)
 		if(!b[i])
@@ -18,6 +21,8 @@ static int first_free_pipe(bool *b) {
 	return -1;
 }
 
+/* matches a file descriptor of a pipe to the index
+in the array in which the file descriptor is located*/
 static int pipe_index(int *pipes, int fd) {
 	for(int i = 0; i < MAX_CLIENTS; i++)
 		if(pipes[i*2] == fd)
@@ -27,7 +32,7 @@ static int pipe_index(int *pipes, int fd) {
 
 int main( int argc, const char* argv[] ) {
 	fd_set selectfds, activefds;
-	char pipe_input[16];
+	char pipe_input[S_MSG_LEN+1];
 	unsigned short port;
 	int serverfd, connfd, free_pipe, to_child[60], from_child[60],
 			bytes_read, current_pipe, rc;
@@ -57,11 +62,8 @@ int main( int argc, const char* argv[] ) {
 	if (rc < 0) {
 		fprintf(stderr, "Failed to initialize database\n");
 		sqlite3_close(db);
-		close(serverfd);
 		return 1;
 	}
-
-	sqlite3_close(db);
 
 	FD_ZERO(&activefds);
 	FD_SET(serverfd, &activefds);
@@ -78,6 +80,9 @@ int main( int argc, const char* argv[] ) {
 					if (connfd < 0)
 						continue;
 
+						/* denies connections if maximum no of clients is reached.
+						The communication with the client will be abstracted once network protocol
+						is implemented*/
 					if (free_pipe < 0) {
 						fprintf(stderr, "Maximum clients reached\n");
 						write(connfd, "Maximum no of clients exceeded", 30);
@@ -111,13 +116,14 @@ int main( int argc, const char* argv[] ) {
 					}
 
 					FD_SET(from_child[free_pipe*2], &activefds);
+
 					close(to_child[free_pipe*2]);
 					close(from_child[free_pipe*2+1]);
 					close(connfd);
 				}
 				else {
 					current_pipe = pipe_index(from_child, i);
-					bytes_read = read(i, pipe_input, 15);
+					bytes_read = read(i, pipe_input, S_MSG_LEN+1);
 
 					if (bytes_read == 0 ||
 							pipe_input == NULL ||
@@ -128,9 +134,10 @@ int main( int argc, const char* argv[] ) {
 						FD_CLR(i, &activefds);
 					}
 					else {
+						/* notifies all workers that the database is updated. */
 						for (int j = 0; j < MAX_CLIENTS; j++) {
 							if (active_pipes[j])
-								write(to_child[j*2+1], S_MSG_UPDATE, strlen(S_MSG_UPDATE)+1);
+								write(to_child[j*2+1], S_MSG_UPDATE, S_MSG_LEN+1);
 						}
 					}
 				}

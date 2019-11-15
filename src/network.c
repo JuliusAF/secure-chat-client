@@ -91,4 +91,4 @@ int accept_connection(int serverfd) {
 
 char *serialize_command_struct(command_t *n);
 command_t *deserialize_command_struct(char *packet);
-char *create_packet(char *data, char *metadata);
+char *create_packet(packet_hdr_t *h, char *payload);

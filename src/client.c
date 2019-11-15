@@ -44,6 +44,8 @@ int main( int argc, const char* argv[] ) {
 	unsigned short port;
 	int socketfd, maxfd, bytes_read, loop = 0;
 
+	printf("size of header: %d\n", HEADER_SIZE);
+
 	if (argc != 3) {
 		fprintf(stderr, "Incorrect number of arguments. Must be 2\n");
 		return EXIT_FAILURE;
@@ -71,7 +73,7 @@ int main( int argc, const char* argv[] ) {
 			bytes_read = read_stdin(input1, sizeof(input1));
 			if (bytes_read == 0)
 				break;
-		
+
 			strcpy(input, input1);
 			node = parse_input(input);
 

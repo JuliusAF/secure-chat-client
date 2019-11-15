@@ -59,6 +59,7 @@ int initialize_database(sqlite3 *db) {
   if (rc != SQLITE_OK) {
     fprintf(stderr, "SQL error: %s\n", err_msg);
     sqlite3_free(err_msg);
+    sqlite3_close(db);
     return -1;
   }
 
@@ -73,6 +74,7 @@ int initialize_database(sqlite3 *db) {
   if (rc != SQLITE_OK) {
     fprintf(stderr, "SQL error: %s\n", err_msg);
     sqlite3_free(err_msg);
+    sqlite3_close(db);
     return -1;
   }
 
@@ -91,7 +93,7 @@ int initialize_database(sqlite3 *db) {
     sqlite3_close(db);
     return -1;
   }
-
+  sqlite3_close(db);
   return 0;
 }
 
@@ -351,8 +353,10 @@ int handle_db_exit(client_t *client_info) {
 
   /* if the worker process does not have a logged in client then nothing needs to
   be done. The function returns successfully*/
-  if (strlen(client_info->username) == 0)
+  if (strlen(client_info->username) == 0) {
+    sqlite3_close(db);
     return COMMAND_EXIT;
+  }
 
   sql = "UPDATE Users SET Status = 0 WHERE Username = ?";
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
@@ -398,11 +402,12 @@ int fetch_db_message(client_t *client_info) {
     return -1;
 
   if(strlen(client_info->username) == 0) {
-    printf("it's zero\n");
     sqlite3_close(db);
     return 1;
   }
 
+  /* This query searches for all entries that occurred after
+  the client has last been updated with this information*/
   sql = "SELECT * FROM Messages WHERE Timestamp > ?1 AND" \
         "(Sender = ?2 OR Recipient = ?2" \
         "OR Recipient IS NULL)";
@@ -438,6 +443,7 @@ int fetch_db_message(client_t *client_info) {
   return 1;
 }
 
+/* places a date string (based on the time t provided) into the provided array*/
 int create_date_string(char *date, time_t t) {
   struct tm *tmp;
 
@@ -455,6 +461,8 @@ int create_date_string(char *date, time_t t) {
   return 1;
 }
 
+/* this splits a query return object from sqlite3 into its components
+and saves them in the msg_components struct*/
 void assign_msg_components(msg_components *comps, sqlite3_stmt *res) {
   int rc;
   time_t t;
@@ -473,7 +481,8 @@ void assign_msg_components(msg_components *comps, sqlite3_stmt *res) {
   strcpy(comps->message, (char *) sqlite3_column_text(res, 3));
 }
 
-/* concatenates the individual parts of the messages into one*/
+/* concatenates the individual parts of the messages (saved in a
+msg_components struct) into one*/
 void create_db_message(char *dest, msg_components *comps) {
   strcpy(dest, "");
 
