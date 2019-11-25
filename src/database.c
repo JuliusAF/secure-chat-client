@@ -43,11 +43,17 @@ sqlite3 *open_database() {
 The online status of a person is set as an integer that is either 0 or 1.
 I'm not sure of a better way to do this as there are no boolean values
 as far as I know, and comparing strings seemed weirder than this*/
-int initialize_database(sqlite3 *db) {
+int initialize_database() {
   char *err_msg = NULL;
   int rc, step;
   char *sql;
+  sqlite3 *db;
   sqlite3_stmt *res;
+
+  db = open_database();
+
+  if (db == NULL)
+		return -1;
 
   sql = "CREATE TABLE IF NOT EXISTS Users(" \
         "Username  TEXT PRIMARY KEY   NOT NULL," \
@@ -90,9 +96,12 @@ int initialize_database(sqlite3 *db) {
   step = sqlite3_step(res);
   if (step != SQLITE_DONE) {
     fprintf(stderr, "Failed to execute statement: %s \n", sqlite3_errmsg(db));
+    sqlite3_finalize(res);
     sqlite3_close(db);
     return -1;
   }
+
+  sqlite3_finalize(res);
   sqlite3_close(db);
   return 0;
 }
@@ -108,6 +117,41 @@ msg_components *initialize_msg_components() {
   strcpy(m->message, "");
 
   return m;
+}
+
+signed long long get_latest_msg_rowid(void) {
+  signed long long rowid;
+  int rc, step;
+  char *sql;
+  sqlite3_stmt *res;
+  sqlite3 *db;
+
+  db = open_database();
+  if (db == NULL)
+    return -1;
+
+  sql = "SELECT MAX(ROWID) FROM Messages";
+
+  rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
+  if (rc != SQLITE_OK) {
+    fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
+    sqlite3_close(db);
+    return -1;
+  }
+
+  step = sqlite3_step(res);
+  if (step != SQLITE_ROW) {
+    fprintf(stderr, "Failed to execute statement: %s \n", sqlite3_errmsg(db));
+    sqlite3_finalize(res);
+    sqlite3_close(db);
+    return -1;
+  }
+
+  rowid = (signed long long) sqlite3_column_int64(res, 0);
+
+  sqlite3_finalize(res);
+  sqlite3_close(db);
+  return rowid;
 }
 
 /* This function handles a login call to the server. It checks for a variety
@@ -394,8 +438,12 @@ int fetch_db_message(client_t *client_info) {
   char *sql, sender[USERNAME_MAX+1], conc_msg[500] = {0};
   msg_components *components;
   int rc, step;
+  signed long long latest_rowid;
   sqlite3_stmt *res;
   sqlite3 *db;
+
+  latest_rowid = (signed long long) get_latest_msg_rowid();
+  printf("last rowid: %lld\n", latest_rowid);
 
   db = open_database();
   if (db == NULL)

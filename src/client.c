@@ -5,6 +5,7 @@
 #include <sys/select.h>
 #include "parser.h"
 #include "network.h"
+#include "client_utilities.h"
 
 /* I can not get input from output redirection to work, which means that
 the test.py file provided also does not work. The problem is that I exit my program
@@ -13,38 +14,13 @@ I'm guessing exiting of the program happens too fast to catch
 the data sent from the server since they are all
 in the same loop. */
 
-int read_stdin(char *buffer, int size) {
-	int bytes_read = 0, index = 0;
-	char c;
-
-	if (buffer == NULL || size == 0) {
-		return -1;
-	}
-
-	while (read(STDIN_FILENO, &c, 1) == 1 && index < size - 1) {
-		bytes_read++;
-
-		if (c == '\n') {
-			buffer[index] = '\0';
-			return bytes_read;
-		}
-		buffer[index] = c;
-		index++;
-	}
-
-	buffer[index] = '\0';
-	return bytes_read;
-}
-
-/* Very rudimentary because I do not yet have a fleshed out protocl.*/
+/* Very rudimentary because I do not yet have a fleshed out protocol.*/
 int main( int argc, const char* argv[] ) {
 	fd_set selectfds, activefds;
 	command_t *node;
 	char *input, *server_output, input1[500];
 	unsigned short port;
 	int socketfd, maxfd, bytes_read, loop = 0;
-
-	printf("size of header: %d\n", HEADER_SIZE);
 
 	if (argc != 3) {
 		fprintf(stderr, "Incorrect number of arguments. Must be 2\n");
@@ -77,9 +53,9 @@ int main( int argc, const char* argv[] ) {
 			strcpy(input, input1);
 			node = parse_input(input);
 
-			if(node != NULL && node->command == COMMAND_ERROR)
-				printf("error: %s\n", node->error_message);
-			else if (node != NULL && node->command != COMMAND_ERROR)
+			print_parse_error(node);
+
+			if (node != NULL && node->command != COMMAND_ERROR)
 				write(socketfd, input, strlen(input)+1);
 
 			if (node != NULL && node->command == COMMAND_EXIT) {

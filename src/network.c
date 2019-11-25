@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include "parser.h"
+#include "network.h"
 
 int create_server_socket(unsigned short port) {
   int fd, r;
@@ -89,6 +90,6 @@ int accept_connection(int serverfd) {
   return connfd;
 }
 
-char *serialize_command_struct(command_t *n);
+packet_t *serialize_command_struct(command_t *n, packet_hdr_t *h);
 command_t *deserialize_command_struct(char *packet);
-char *create_packet(packet_hdr_t *h, char *payload);
+char *create_packet(packet_t *t);

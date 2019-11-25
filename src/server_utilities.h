@@ -1,8 +1,8 @@
 #ifndef SERVER_UTILITIES_H
 #define SERVER_UTILITIES_H
 
-#include "parser.h"
 #include <sqlite3.h>
+#include "parser.h"
 
 #define MAX_CLIENTS 30
 #define DATE_FORMAT "%Y-%m-%d %H:%M:%S"
@@ -11,9 +11,9 @@ The communication between them, however, is very simple and
 there is no need for elaborate messages. The workers tell the server
 if their connection ended with "Closed" and the worker tell the server,
 and vice versa, if the databse has updated.*/
-#define S_MSG_UPDATE "Update"
-#define S_MSG_CLOSE "Closed"
-#define S_MSG_LEN 6
+#define S_MSG_UPDATE "U"
+#define S_MSG_CLOSE "C"
+#define S_MSG_LEN 1
 
 typedef struct client_info {
   int connfd;

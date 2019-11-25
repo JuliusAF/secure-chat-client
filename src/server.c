@@ -32,13 +32,12 @@ static int pipe_index(int *pipes, int fd) {
 
 int main( int argc, const char* argv[] ) {
 	fd_set selectfds, activefds;
-	char pipe_input[S_MSG_LEN+1];
+	char pipe_input;
 	unsigned short port;
 	int serverfd, connfd, free_pipe, to_child[60], from_child[60],
 			bytes_read, current_pipe, rc;
 	bool active_pipes[30] = {false};
 	pid_t pid;
-	sqlite3 *db;
 
 	if (argc != 2) {
 		fprintf(stderr, "Incorrect number of arguments. Must be 1\n");
@@ -52,16 +51,10 @@ int main( int argc, const char* argv[] ) {
 	port = (unsigned short) atoi(argv[1]);
 	serverfd = create_server_socket(port);
 
-	db = open_database();
-  if (db == NULL) {
-		close(serverfd);
-		return 1;
-	}
-
-	rc = initialize_database(db);
+	rc = initialize_database();
 	if (rc < 0) {
 		fprintf(stderr, "Failed to initialize database\n");
-		sqlite3_close(db);
+		close(serverfd);
 		return 1;
 	}
 
@@ -123,11 +116,10 @@ int main( int argc, const char* argv[] ) {
 				}
 				else {
 					current_pipe = pipe_index(from_child, i);
-					bytes_read = read(i, pipe_input, S_MSG_LEN+1);
+					bytes_read = read(i, &pipe_input, S_MSG_LEN);
 
 					if (bytes_read == 0 ||
-							pipe_input == NULL ||
-							strcmp(pipe_input, S_MSG_CLOSE) == 0) {
+							pipe_input == 'C') {
 						active_pipes[current_pipe] = false;
 						close(i);
 						close(to_child[current_pipe*2+1]);
@@ -137,7 +129,7 @@ int main( int argc, const char* argv[] ) {
 						/* notifies all workers that the database is updated. */
 						for (int j = 0; j < MAX_CLIENTS; j++) {
 							if (active_pipes[j])
-								write(to_child[j*2+1], S_MSG_UPDATE, S_MSG_LEN+1);
+								write(to_child[j*2+1], S_MSG_UPDATE, S_MSG_LEN);
 						}
 					}
 				}

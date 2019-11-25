@@ -23,7 +23,7 @@ static client_t *initialize_client_info(int connfd) {
 
 void worker(int connfd, int from_parent[2], int to_parent[2]) {
 	fd_set selectfds, activefds;
-	char *input, pipe_input[S_MSG_LEN+1];
+	char *input, pipe_input;
 	int maxfd, bytes_read, rc;
 	command_t *node = NULL;
   client_t *client_info;
@@ -49,7 +49,7 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 				continue;
 			}
 			else if (bytes_read == 0) {
-				write(to_parent[1], S_MSG_CLOSE, S_MSG_LEN+1);
+				write(to_parent[1], S_MSG_CLOSE, S_MSG_LEN);
         handle_db_exit(client_info);
         close(connfd);
 				break;
@@ -73,7 +73,7 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
     sends the client all the messages that occurred since it last did
     so. */
 		if (FD_ISSET(from_parent[0], &selectfds)) {
-			read(from_parent[0], pipe_input, S_MSG_LEN);
+			read(from_parent[0], &pipe_input, S_MSG_LEN);
       fetch_db_message(client_info);
 		}
 	}
@@ -112,7 +112,7 @@ int handle_client_input(command_t *node, client_t *client_info, int pipefd) {
     case COMMAND_PUBMSG:
       rc = handle_db_pubmsg(node, client_info);
       if (rc == COMMAND_PUBMSG) {
-        write(pipefd, S_MSG_UPDATE, S_MSG_LEN+1);
+        write(pipefd, S_MSG_UPDATE, S_MSG_LEN);
       }
       break;
     case COMMAND_USERS:
@@ -121,7 +121,7 @@ int handle_client_input(command_t *node, client_t *client_info, int pipefd) {
     case COMMAND_EXIT:
       rc = handle_db_exit(client_info);
       if (rc == COMMAND_EXIT) {
-        write(pipefd, S_MSG_CLOSE, S_MSG_LEN+1);
+        write(pipefd, S_MSG_CLOSE, S_MSG_LEN);
         close(client_info->connfd);
       }
       break;

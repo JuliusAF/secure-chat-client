@@ -30,6 +30,6 @@ int accept_connection(int serverfd);
 
 packet_t *serialize_command_struct(command_t *n, packet_hdr_t *h);
 command_t *deserialize_command_struct(char *packet);
-char *create_packet(packet *t);
+char *create_packet(packet_t *t);
 
 #endif
