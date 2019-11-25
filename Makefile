@@ -1,15 +1,17 @@
 SERVER_SOURCES = src/server.c src/parser.c \
 								 src/safe_wrappers.c src/network.c \
-								 src/database.c src/server_utilities.c
+								 src/database.c src/server_utilities.c \
+								 src/ssl-nonblock.c
 SERVER_HEADERS = src/parser.h src/safe_wrappers.h \
 								 src/network.h src/database.h \
-								 src/server_utilities.h
+								 src/server_utilities.h src/ssl-nonblock.h
 
 CLIENT_SOURCES = src/client.c src/parser.c \
 								 src/safe_wrappers.c src/network.c \
-								 src/client_utilities.c
+								 src/client_utilities.c src/ssl-nonblock.c
 CLIENT_HEADERS = src/parser.h src/safe_wrappers.h \
-								 src/network.h src/client_utilities.h
+								 src/network.h src/client_utilities.h \
+								 src/ssl-nonblock.h
 
 TARGETS = server client
 KEYS = ca-key.pem ca-cert.pem server-key.pem server-csr.pem server-ca-cert.pem
@@ -45,7 +47,7 @@ server: $(SERVER_SOURCES:.c=.o)
 $(SERVER_SOURCES:.c=.o): $(SERVER_HEADERS)
 
 client: $(CLIENT_SOURCES:.c=.o)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 $(CLIENT_SOURCES:.c=.o): $(CLIENT_HEADERS)
 

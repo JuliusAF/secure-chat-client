@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include "ssl-nonblock.h"
 #include "parser.h"
 #include "network.h"
 #include "client_utilities.h"
@@ -36,6 +39,23 @@ int main( int argc, const char* argv[] ) {
 	input = (char *) malloc(sizeof(char) * 501);
 	server_output = (char *) malloc(sizeof(char) * MAX_PACKET_SIZE+1);
 
+	char cacertpath[] = "ttpkeys/ca-cert.pem";
+	SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+	SSL_CTX_load_verify_locations(ctx, cacertpath, NULL);
+  SSL *ssl = SSL_new(ctx);
+	SSL_set_verify(ssl, SSL_VERIFY_PEER, NULL);
+
+  /* configure the socket as non-blocking */
+  set_nonblock(socketfd);
+
+  /* set up SSL connection with client and check server certificate*/
+  SSL_set_fd(ssl, socketfd);
+	if (ssl_block_connect(ssl, socketfd) != 1) {
+    ERR_print_errors_fp(stderr);
+    fprintf(stderr, "verify result=%ld\n", SSL_get_verify_result(ssl));
+    exit(EXIT_FAILURE);
+  }
+
 	maxfd = (STDIN_FILENO > socketfd) ? STDIN_FILENO : socketfd;
 	FD_ZERO(&activefds);
 	FD_SET(STDIN_FILENO, &activefds);
@@ -56,7 +76,7 @@ int main( int argc, const char* argv[] ) {
 			print_parse_error(node);
 
 			if (node != NULL && node->command != COMMAND_ERROR)
-				write(socketfd, input, strlen(input)+1);
+				ssl_block_write(ssl, socketfd, input, strlen(input)+1);
 
 			if (node != NULL && node->command == COMMAND_EXIT) {
 				free(node);
@@ -65,8 +85,8 @@ int main( int argc, const char* argv[] ) {
 			free(node);
 		}
 
-		if (FD_ISSET(socketfd, &selectfds)) {
-			bytes_read = read(socketfd, server_output, MAX_PACKET_SIZE);
+		if (FD_ISSET(socketfd, &selectfds) && ssl_has_data(ssl)) {
+			bytes_read = ssl_block_read(ssl, socketfd, server_output, MAX_PACKET_SIZE);
 			if (bytes_read < 0) {
 				perror("failed to read from server socket");
 				continue;
@@ -79,6 +99,9 @@ int main( int argc, const char* argv[] ) {
 		}
 		loop++;
 	}
+
+	SSL_free(ssl);
+  SSL_CTX_free(ctx);
 	free(server_output);
 	free(input);
 	close(socketfd);

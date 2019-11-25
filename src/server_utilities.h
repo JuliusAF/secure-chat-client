@@ -1,7 +1,9 @@
 #ifndef SERVER_UTILITIES_H
 #define SERVER_UTILITIES_H
 
+#include <stdbool.h>
 #include <sqlite3.h>
+#include <openssl/ssl.h>
 #include "parser.h"
 
 #define MAX_CLIENTS 30
@@ -17,6 +19,8 @@ and vice versa, if the databse has updated.*/
 
 typedef struct client_info {
   int connfd;
+  SSL *ssl;
+  bool is_logged;
   char username[USERNAME_MAX+1];
   time_t last_updated;
 } client_t;

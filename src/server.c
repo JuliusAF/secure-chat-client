@@ -78,7 +78,6 @@ int main( int argc, const char* argv[] ) {
 						is implemented*/
 					if (free_pipe < 0) {
 						fprintf(stderr, "Maximum clients reached\n");
-						write(connfd, "Maximum no of clients exceeded", 30);
 						close(connfd);
 						continue;
 					}

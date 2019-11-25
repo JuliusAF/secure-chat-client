@@ -5,16 +5,21 @@
 #include <stdbool.h>
 #include <sqlite3.h>
 #include <time.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+#include "ssl-nonblock.h"
 #include "parser.h"
 #include "network.h"
 #include "server_utilities.h"
 #include "safe_wrappers.h"
 #include "database.h"
 
-static client_t *initialize_client_info(int connfd) {
+static client_t *initialize_client_info(int connfd, SSL *ssl) {
   client_t *c = safe_malloc(sizeof(client_t));
 
   c->connfd = connfd;
+  c->ssl = ssl;
+  c->is_logged = false;
   strcpy(c->username, "");
   c->last_updated = 0;
 
@@ -28,7 +33,18 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 	command_t *node = NULL;
   client_t *client_info;
 
-  client_info = initialize_client_info(connfd);
+  char pathcert[] = "serverkeys/server-ca-cert.pem";
+  char pathkey[] = "serverkeys/server-key.pem";
+  SSL_CTX *ctx = SSL_CTX_new(TLS_server_method());
+  SSL *ssl = SSL_new(ctx);
+  SSL_use_certificate_file(ssl, pathcert, SSL_FILETYPE_PEM);
+  SSL_use_PrivateKey_file(ssl, pathkey, SSL_FILETYPE_PEM);
+
+  set_nonblock(connfd);
+  SSL_set_fd(ssl, connfd);
+  ssl_block_accept(ssl, connfd);
+
+  client_info = initialize_client_info(connfd, ssl);
   input = (char *) safe_malloc(sizeof(char) * MAX_PACKET_SIZE+1);
 	close(from_parent[1]);
 	close(to_parent[0]);
@@ -42,8 +58,8 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 		selectfds = activefds;
 		select(maxfd+1, &selectfds, NULL, NULL, NULL);
 
-		if (FD_ISSET(connfd, &selectfds)) {
-			bytes_read = read(connfd, input, MAX_PACKET_SIZE);
+		if (FD_ISSET(connfd, &selectfds) && ssl_has_data(ssl)) {
+			bytes_read = ssl_block_read(ssl, connfd, input, MAX_PACKET_SIZE);
 			if (bytes_read < 0) {
 				perror("failed to read bytes");
 				continue;
@@ -68,7 +84,7 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 
 			free_node(node);
 		}
-    /* very rudimentary right now. If the server notifies
+    /* If the server notifies
     the worker that the database has been updated, the worker
     sends the client all the messages that occurred since it last did
     so. */
@@ -77,8 +93,11 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
       fetch_db_message(client_info);
 		}
 	}
+
 	close(from_parent[0]);
 	close(to_parent[1]);
+  SSL_free(ssl);
+  SSL_CTX_free(ctx);
   free(client_info);
 	free(input);
 }

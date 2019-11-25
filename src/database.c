@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <sqlite3.h>
 #include <time.h>
+#include <openssl/ssl.h>
+#include "ssl-nonblock.h"
 #include "server_utilities.h"
 #include "database.h"
 #include "parser.h"
@@ -169,7 +171,7 @@ int handle_db_login(command_t *node, client_t *client_info) {
 
   if (strlen(client_info->username) != 0) {
     strcpy(msg, "error: client already logged in");
-    write(client_info->connfd, msg, strlen(msg)+1);
+    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
     sqlite3_close(db);
     return -1;
   }
@@ -192,7 +194,7 @@ int handle_db_login(command_t *node, client_t *client_info) {
     strcpy(msg, "error: user ");
     strcat(msg, node->acc_details.username);
     strcat(msg, " does not exist");
-    write(client_info->connfd, msg, strlen(msg)+1);
+    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
     sqlite3_close(db);
     return -1;
   }
@@ -207,13 +209,13 @@ int handle_db_login(command_t *node, client_t *client_info) {
     strcpy(msg, "error: user ");
     strcat(msg, node->acc_details.username);
     strcat(msg, " is already logged in");
-    write(client_info->connfd, msg, strlen(msg)+1);
+    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
     sqlite3_close(db);
     return -1;
   }
   else if (strcmp(password, node->acc_details.password) != 0) {
     strcpy(msg, "error: invalid credentials");
-    write(client_info->connfd, msg, strlen(msg)+1);
+    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
     sqlite3_close(db);
     return -1;
   }
@@ -238,7 +240,7 @@ int handle_db_login(command_t *node, client_t *client_info) {
     return -1;
   }
   strcpy(msg, "authentification succeeded");
-  write(client_info->connfd, msg, strlen(msg)+1);
+  ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
 
   /* sets the username field in the struct that manages client information
    for the worker process*/
@@ -266,7 +268,7 @@ int handle_db_register(command_t *node, client_t *client_info) {
   /* checks if the user is logged in. I will abstract the if check */
   if (strlen(client_info->username) != 0) {
     strcpy(msg, "error: you cannot register a new account while logged in");
-    write(client_info->connfd, msg, strlen(msg)+1);
+    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
     sqlite3_close(db);
     return -1;
   }
@@ -290,7 +292,7 @@ int handle_db_register(command_t *node, client_t *client_info) {
     strcpy(msg, "error: user ");
     strcat(msg, node->acc_details.username);
     strcat(msg, " already exists");
-    write(client_info->connfd, msg, strlen(msg)+1);
+    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
     sqlite3_close(db);
     return -1;
   }
@@ -320,7 +322,7 @@ int handle_db_register(command_t *node, client_t *client_info) {
     return -1;
   }
   strcpy(msg, "registration succeeded");
-  write(client_info->connfd, msg, strlen(msg)+1);
+  ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
 
   /* client is now logged in so the struct is updated*/
   strcpy(client_info->username, node->acc_details.username);
@@ -348,7 +350,7 @@ int handle_db_pubmsg(command_t *node, client_t *client_info) {
 
   if (strlen(client_info->username) == 0) {
     strcpy(msg, "error: you must be logged in to send a public message");
-    write(client_info->connfd, msg, strlen(msg)+1);
+    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
     sqlite3_close(db);
     return -1;
   }
@@ -480,7 +482,7 @@ int fetch_db_message(client_t *client_info) {
     assign_msg_components(components, res);
 
     create_db_message(conc_msg, components);
-    write(client_info->connfd, conc_msg, strlen(conc_msg)+1);
+    ssl_block_write(client_info->ssl, client_info->connfd, conc_msg, strlen(conc_msg)+1);
 
     step = sqlite3_step(res);
   }
