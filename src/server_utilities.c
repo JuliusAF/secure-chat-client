@@ -33,8 +33,8 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 	command_t *node = NULL;
   client_t *client_info;
 
-  char pathcert[] = "serverkeys/server-ca-cert.pem";
-  char pathkey[] = "serverkeys/server-key.pem";
+  const char pathcert[] = "serverkeys/server-ca-cert.pem";
+  const char pathkey[] = "serverkeys/server-key.pem";
   SSL_CTX *ctx = SSL_CTX_new(TLS_server_method());
   SSL *ssl = SSL_new(ctx);
   SSL_use_certificate_file(ssl, pathcert, SSL_FILETYPE_PEM);

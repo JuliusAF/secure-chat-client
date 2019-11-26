@@ -5,10 +5,12 @@
 #include <sys/select.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include "safe_wrappers.h"
 #include "ssl-nonblock.h"
 #include "parser.h"
 #include "network.h"
 #include "client_utilities.h"
+#include "cryptography.h"
 
 /* I can not get input from output redirection to work, which means that
 the test.py file provided also does not work. The problem is that I exit my program
@@ -17,32 +19,41 @@ I'm guessing exiting of the program happens too fast to catch
 the data sent from the server since they are all
 in the same loop. */
 
-/* Very rudimentary because I do not yet have a fleshed out protocol.*/
-int main( int argc, const char* argv[] ) {
-	fd_set selectfds, activefds;
-	command_t *node;
-	char *input, *server_output, input1[500];
-	unsigned short port;
-	int socketfd, maxfd, bytes_read, loop = 0;
-
+/* checks if program received proper arguments*/
+static void verify_arguments(int argc, const char* argv[]) {
 	if (argc != 3) {
 		fprintf(stderr, "Incorrect number of arguments. Must be 2\n");
-		return EXIT_FAILURE;
+		exit(EXIT_FAILURE);
 	}
 	else if (!is_digit(argv[2])) {
 		fprintf(stderr, "Port must be a number\n");
-		return EXIT_FAILURE;
+		exit(EXIT_FAILURE);
 	}
+}
+
+int main(int argc, const char* argv[]) {
+	fd_set selectfds, activefds;
+	command_t *node;
+	char *input, *server_output;
+	unsigned short port;
+	int socketfd, maxfd, bytes_read;
+
+	verify_arguments(argc, argv);
 
 	port = (unsigned short) atoi(argv[2]);
 	socketfd = client_connect(argv[1], port);
-	input = (char *) malloc(sizeof(char) * 501);
-	server_output = (char *) malloc(sizeof(char) * MAX_PACKET_SIZE+1);
+	server_output = (char *) safe_malloc(sizeof(char) * MAX_PACKET_SIZE+1);
 
-	char cacertpath[] = "ttpkeys/ca-cert.pem";
+	const char cacertpath[] = "ttpkeys/ca-cert.pem";
 	SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
 	SSL_CTX_load_verify_locations(ctx, cacertpath, NULL);
   SSL *ssl = SSL_new(ctx);
+	X509_VERIFY_PARAM *param = SSL_get0_param(ssl);
+	X509_VERIFY_PARAM_set_hostflags(param, 0);
+	if (!X509_VERIFY_PARAM_set1_host(param, SERVER_COMMON_NAME, sizeof(SERVER_COMMON_NAME)-1)) {
+		printf("error\n");
+	  exit(EXIT_FAILURE);
+	}
 	SSL_set_verify(ssl, SSL_VERIFY_PEER, NULL);
 
   /* configure the socket as non-blocking */
@@ -66,11 +77,11 @@ int main( int argc, const char* argv[] ) {
 		select(maxfd+1, &selectfds, NULL, NULL, NULL);
 
 		if (FD_ISSET(STDIN_FILENO, &selectfds)) {
-			bytes_read = read_stdin(input1, sizeof(input1));
+			input = (char *) safe_malloc(sizeof(char) * CHUNK);
+			bytes_read = read_stdin(input, CHUNK);
 			if (bytes_read == 0)
 				break;
 
-			strcpy(input, input1);
 			node = parse_input(input);
 
 			print_parse_error(node);
@@ -79,10 +90,12 @@ int main( int argc, const char* argv[] ) {
 				ssl_block_write(ssl, socketfd, input, strlen(input)+1);
 
 			if (node != NULL && node->command == COMMAND_EXIT) {
-				free(node);
+				free_node(node);
+				free(input);
 				break;
 			}
-			free(node);
+			free_node(node);
+			free(input);
 		}
 
 		if (FD_ISSET(socketfd, &selectfds) && ssl_has_data(ssl)) {
@@ -97,13 +110,11 @@ int main( int argc, const char* argv[] ) {
 			}
 			printf("%s\n", server_output);
 		}
-		loop++;
 	}
 
 	SSL_free(ssl);
   SSL_CTX_free(ctx);
 	free(server_output);
-	free(input);
 	close(socketfd);
 	return 0;
 }

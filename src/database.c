@@ -169,7 +169,7 @@ int handle_db_login(command_t *node, client_t *client_info) {
   if (db == NULL)
     return -1;
 
-  if (strlen(client_info->username) != 0) {
+  if (client_info->is_logged) {
     strcpy(msg, "error: client already logged in");
     ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
     sqlite3_close(db);
@@ -244,6 +244,7 @@ int handle_db_login(command_t *node, client_t *client_info) {
 
   /* sets the username field in the struct that manages client information
    for the worker process*/
+  client_info->is_logged = true;
   strcpy(client_info->username, node->acc_details.username);
 
   sqlite3_finalize(res);
@@ -265,8 +266,8 @@ int handle_db_register(command_t *node, client_t *client_info) {
   if (db == NULL)
     return -1;
 
-  /* checks if the user is logged in. I will abstract the if check */
-  if (strlen(client_info->username) != 0) {
+  /* checks if the user is logged in*/
+  if (client_info->is_logged) {
     strcpy(msg, "error: you cannot register a new account while logged in");
     ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
     sqlite3_close(db);
@@ -325,6 +326,7 @@ int handle_db_register(command_t *node, client_t *client_info) {
   ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
 
   /* client is now logged in so the struct is updated*/
+  client_info->is_logged = true;
   strcpy(client_info->username, node->acc_details.username);
 
   sqlite3_finalize(res);
@@ -348,7 +350,7 @@ int handle_db_pubmsg(command_t *node, client_t *client_info) {
 
   /* similar to the above occurences, checks if a user is logged in. Will be abstracted */
 
-  if (strlen(client_info->username) == 0) {
+  if (!client_info->is_logged) {
     strcpy(msg, "error: you must be logged in to send a public message");
     ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
     sqlite3_close(db);
@@ -399,7 +401,7 @@ int handle_db_exit(client_t *client_info) {
 
   /* if the worker process does not have a logged in client then nothing needs to
   be done. The function returns successfully*/
-  if (strlen(client_info->username) == 0) {
+  if (!client_info->is_logged) {
     sqlite3_close(db);
     return COMMAND_EXIT;
   }
@@ -451,7 +453,7 @@ int fetch_db_message(client_t *client_info) {
   if (db == NULL)
     return -1;
 
-  if(strlen(client_info->username) == 0) {
+  if(!client_info->is_logged) {
     sqlite3_close(db);
     return 1;
   }

@@ -58,3 +58,5 @@ SERVER TO CLIENT
 The server can send the client data of variable size, depending on the nature of the contents. The server can send the client either information obtained from the database (public and private messages) or error messages that can only be identified server side because they require database access. The makeup of these packets are as follows:
 - A variable amount of bytes containing the data sent from server to client.
   The size of this data is in the header.
+
+PROTOCOL:

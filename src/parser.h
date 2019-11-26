@@ -7,7 +7,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define KILOBYTE 1024
+#define CHUNK 10000
 #define MESSAGE_MAX 200
 #define USERNAME_MAX 20
 #define PASSWORD_MAX 24

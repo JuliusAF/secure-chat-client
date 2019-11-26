@@ -11,6 +11,18 @@
 #include "server_utilities.h"
 #include "safe_wrappers.h"
 
+/* verifies program arguments*/
+static void verify_arguments(int argc, const char* argv[]) {
+	if (argc != 2) {
+		fprintf(stderr, "Incorrect number of arguments. Must be 1\n");
+		exit(EXIT_FAILURE);
+	}
+	else if (!is_digit(argv[1])) {
+		fprintf(stderr, "Port must be a number\n");
+		exit(EXIT_FAILURE);
+	}
+}
+
 /* returns the index of the first element
 that is labelled false. This index is the first free location
 in to_ and from_child where a pipe can be created with pipe()*/
@@ -30,7 +42,7 @@ static int pipe_index(int *pipes, int fd) {
 	return -1;
 }
 
-int main( int argc, const char* argv[] ) {
+int main(int argc, const char* argv[]) {
 	fd_set selectfds, activefds;
 	char pipe_input;
 	unsigned short port;
@@ -39,14 +51,7 @@ int main( int argc, const char* argv[] ) {
 	bool active_pipes[30] = {false};
 	pid_t pid;
 
-	if (argc != 2) {
-		fprintf(stderr, "Incorrect number of arguments. Must be 1\n");
-		return EXIT_FAILURE;
-	}
-	else if (!is_digit(argv[1])) {
-		fprintf(stderr, "Port must be a number\n");
-		return EXIT_FAILURE;
-	}
+	verify_arguments(argc, argv);
 
 	port = (unsigned short) atoi(argv[1]);
 	serverfd = create_server_socket(port);

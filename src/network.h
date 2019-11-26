@@ -2,34 +2,56 @@
 #define NETWORK_H
 
 #include <stdint.h>
+#include <openssl/ssl.h>
 #include "parser.h"
+#include "cryptography.h"
 
-#define MAX_PACKET_SIZE 1024
+#define MAX_PACKET_SIZE 2048
+#define MAX_PAYLOAD_SIZE (MAX_PACKET_SIZE - HEADER_SIZE)
+
 /* define the id codes for packets from clients to server */
-#define C_MSG_PARSED 1001
+#define C_MSG_EXIT 1001
+#define C_MSG_LOGIN 1002
+#define C_MSG_REGISTER 1003
+#define C_MSG_PRIVMSG 1004
+#define C_MSG_PUBMSG 1005
+#define C_MSG_USERS 1006
+
+#define C_META_PUBKEY_RQST 1101
+
 /* defines the id codes for packets from server to clients*/
-#define S_MSG_PAYLOAD 2001
-#define S_MSG_ERROR 2002
+#define S_MSG_PUBMSG 2001
+#define S_MSG_PRIVMSG 2002
 #define S_MSG_USERS 2003
+#define S_MSG_GENERIC_ERR 2004
+
+#define S_META_LOGIN_PASS 2101
+#define S_META_LOGIN_FAIL 2102
+#define S_META_REGISTER_PASS 2103
+#define S_META_REGISTER_FAIL 2104
+
 /* defines fixed size of header*/
-#define HEADER_SIZE sizeof(uint32_t) + sizeof(uint16_t)
+#define HEADER_SIZE (sizeof(uint32_t) + sizeof(uint16_t) + MAX_SIG_SZ)
 
 typedef struct packet_header {
   uint32_t pckt_sz;
   uint16_t pckt_id;
+  unsigned char sig[MAX_SIG_SZ];
 } packet_hdr_t;
 
-typedef struct packet {
+typedef struct packet_to_send {
   packet_hdr_t *header;
-  char *payload;
+  unsigned char *payload;
 } packet_t;
 
 int create_server_socket(unsigned short port);
 int client_connect(const char *hostname, unsigned short port);
 int accept_connection(int serverfd);
 
-packet_t *serialize_command_struct(command_t *n, packet_hdr_t *h);
-command_t *deserialize_command_struct(char *packet);
-char *create_packet(packet_t *t);
+int read_packet_from_socket(SSL *ssl, int fd, unsigned char *buffer);
+packet_t *pack_packet(packet_hdr_t *header, unsigned char *payload);
+unsigned char *serialize_packet(packet_t *p);
+packet_t *unpack_packet(unsigned char *buffer, int size);
+void free_packet(packet_t *p);
 
 #endif
