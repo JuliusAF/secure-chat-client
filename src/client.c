@@ -37,6 +37,8 @@ int main(int argc, const char* argv[]) {
 	char *input, *server_output;
 	unsigned short port;
 	int socketfd, maxfd, bytes_read;
+	user_t *user;
+	request_t *request;
 
 	verify_arguments(argc, argv);
 
@@ -67,6 +69,9 @@ int main(int argc, const char* argv[]) {
     exit(EXIT_FAILURE);
   }
 
+	user = initialize_user_info(ssl, socketfd);
+	request = initialize_request();
+
 	maxfd = (STDIN_FILENO > socketfd) ? STDIN_FILENO : socketfd;
 	FD_ZERO(&activefds);
 	FD_SET(STDIN_FILENO, &activefds);
@@ -81,6 +86,8 @@ int main(int argc, const char* argv[]) {
 			bytes_read = read_stdin(input, CHUNK);
 			if (bytes_read == 0)
 				break;
+			if (bytes_read < 0)
+				continue;
 
 			node = parse_input(input);
 

@@ -3,8 +3,13 @@
 
 #define MAX_SIG_SZ 256
 /* definitions for creation of client master key*/
-#define MASTER_KEY_LEN 64
+#define MASTER_KEY_LEN 16
 #define ITERATION 10000
+
+#define IV_SIZE 16
+
+#define ENCRYPT 1
+#define DECRYPT 0
 
 #include <stdbool.h>
 #include <openssl/sha.h>
@@ -13,18 +18,21 @@
 when an ssl connection is established*/
 #define SERVER_COMMON_NAME "server.example.com"
 
-typedef struct rsa_key_pairs {
+typedef struct rsa_keypairs {
   int privlen;
   int publen;
   char *privkey;
   char *pubkey;
-} key_pair_t;
+} keypair_t;
 
 unsigned char *create_rand_salt(int size);
 unsigned char *hash_password(char *input, int size, unsigned char *salt, int salt_size);
 unsigned char *gen_master_key(char *username, char *password);
 
-key_pair_t *create_rsa_pair(void);
-void free_key_pair(key_pair_t *k);
+keypair_t *create_rsa_pair(void);
+bool is_keypair_legal(keypair_t *k);
+void free_keypair(keypair_t *k);
+
+int apply_aes(unsigned char *output, unsigned char *input, int size, unsigned char *key, unsigned char *iv, int enc);
 
 #endif

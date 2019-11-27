@@ -18,6 +18,9 @@ unsigned char *create_rand_salt(int size) {
   unsigned char *salt;
 
   salt = (unsigned char *) safe_malloc(sizeof(unsigned char) * size);
+  if (salt == NULL)
+    return NULL;
+
   if (RAND_priv_bytes(salt, size) < 1) {
     ERR_print_errors_fp(stderr);
     fprintf(stderr, "Failed to create salt\n");
@@ -35,6 +38,8 @@ unsigned char *hash_password(char *input, int size, unsigned char *salt, int sal
 
   if (input == NULL) return NULL;
   md = (unsigned char *) safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH);
+  if (md == NULL)
+    return NULL;
   length = size;
 
   if (salt != NULL) {
@@ -61,14 +66,13 @@ is used to encrypt the private key when it is sent to be stored on the server.
 uses username as a salt and adds iteration to reduce effectiveness of brute forcing*/
 unsigned char *gen_master_key(char *username, char *password) {
   int ret, passlen, saltlen;
-  unsigned char *key, *salt;
+  unsigned char *key = NULL, *salt = NULL;
 
   if (username == NULL || password == NULL)
     return NULL;
 
-  if ((passlen = strlen(password)) > PASSWORD_MAX)
-    return NULL;
-  if ((saltlen = strlen(username)) > USERNAME_MAX)
+  if ((passlen = strlen(password)) > PASSWORD_MAX ||
+      (saltlen = strlen(username)) > USERNAME_MAX)
     return NULL;
 
   key = (unsigned char *) safe_malloc(sizeof(unsigned char) * MASTER_KEY_LEN+1);
@@ -95,16 +99,18 @@ unsigned char *gen_master_key(char *username, char *password) {
   return key;
 }
 
-key_pair_t *create_rsa_pair() {
+/* creates an rsa key pair and stores it in the key pair struct. These keys
+are created and will be linked to the user who commenced the register request */
+keypair_t *create_rsa_pair() {
   int ret, keylen = 0;
   bool error = false;
   const int bits = 2048, exponent = 65537;
   BIGNUM *bignum = NULL;
   BIO *biopriv = NULL, *biopub = NULL;
   RSA *rsa = NULL;
-  key_pair_t *keys = NULL;
+  keypair_t *keys = NULL;
 
-  keys = (key_pair_t *) safe_malloc(sizeof(key_pair_t));
+  keys = (keypair_t *) safe_malloc(sizeof(keypair_t));
   if (keys == NULL) {
     error = true;
     goto cleanup;
@@ -176,24 +182,51 @@ key_pair_t *create_rsa_pair() {
   printf("pubkey: %s\n", keys->pubkey);
 
   cleanup:
-  
+
   BIO_free_all(biopub);
   BIO_free_all(biopriv);
   BN_free(bignum);
   RSA_free(rsa);
   if (error) {
     fprintf(stderr, "failed to create rsa pair\n");
-    free_key_pair(keys);
+    free_keypair(keys);
   }
 
   return error ? NULL : keys;
 }
 
-void free_key_pair(key_pair_t *k) {
+/* helper function to create_rsa_pair that checks whether a given keypair_t
+struct is legal (all variables are allocated) */
+bool is_keypair_legal(keypair_t *k) {
+  return (k != NULL && k->privkey != NULL && k->pubkey != NULL);
+}
+
+/* helper function that frees a given key pair*/
+void free_keypair(keypair_t *k) {
   if (k == NULL)
     return;
 
   free(k->privkey);
   free(k->pubkey);
   free(k);
+}
+
+/* applies AES-128-cbc encryption to the given buffer, based on the given
+initialization vector. returns -1 on failure or size of encrypted data on success */
+int apply_aes(unsigned char *output, unsigned char *input, int size, unsigned char *key, unsigned char *iv, int enc) {
+  const EVP_CIPHER *type = EVP_aes_128_cbc();
+  int tmp, outlen, ret = 0;
+  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+
+  if (EVP_CipherInit(ctx, type, key, iv, enc) < 1)
+    return -1;
+  if ((ret = EVP_CipherUpdate(ctx, output, &tmp, input, size)) < 1)
+    return -1;
+  outlen = tmp;
+  if (EVP_CipherFinal(ctx, output+tmp, &tmp) < 1)
+    return -1;
+  outlen += tmp;
+
+  EVP_CIPHER_CTX_free(ctx);
+  return outlen;
 }

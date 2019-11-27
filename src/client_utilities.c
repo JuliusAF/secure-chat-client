@@ -4,24 +4,45 @@
 #include <string.h>
 #include <stdbool.h>
 #include <time.h>
+#include "cryptography.h"
+#include "network.h"
 #include "safe_wrappers.h"
 #include "parser.h"
 #include "client_utilities.h"
+#include "client_network.h"
 
 
 /* Initializes the struct that holds the information of the user
 logged into the current instance of the client application*/
-user_t *initialize_user_info() {
+user_t *initialize_user_info(SSL *ssl, int connfd) {
+	if (ssl == NULL)
+		return NULL;
+
 	user_t *user = safe_malloc(sizeof(user_t));
 	if (user == NULL)
 		return NULL;
 
 	user->is_logged = false;
+	user->ssl = ssl;
+	user->connfd = connfd;
 	strcpy(user->username, "");
 	memset(user->masterkey, '\0', MASTER_KEY_LEN+1);
 	user->rsa_keys = NULL;
 
 	return user;
+}
+
+/* initializes and returns request struct*/
+request_t *initialize_request(void) {
+	request_t *r = safe_malloc(sizeof(request_t));
+	if (r == NULL)
+		return NULL;
+
+	r->is_request_active = false;
+	strcpy(r->username, "");
+	memset(r->masterkey, '\0', MASTER_KEY_LEN+1);
+
+	return r;
 }
 
 /* function reads input of fixed size from stdin*/
@@ -101,7 +122,7 @@ int create_formatted_msg(char *dest, command_t *n, user_t *u) {
 /* this function handles the user input dependent of how it was parsed.
 From this function, the packets for each command are created and sent
 to the server*/
-void handle_user_input(command_t *n, user_t *u) {
+void handle_user_input(command_t *n, user_t *u, request_t *r) {
 	if (n == NULL)
     return;
 
@@ -113,10 +134,7 @@ void handle_user_input(command_t *n, user_t *u) {
 			}
       break;
     case COMMAND_REGISTER:
-			if (u->is_logged) {
-				print_error("you cannot register a new account while logged in");
-				break;
-			}
+			handle_user_register(n, u, r);
       break;
     case COMMAND_PRIVMSG:
 			if (!u->is_logged) {
@@ -144,6 +162,44 @@ void handle_user_input(command_t *n, user_t *u) {
     default:
       break;
   }
+}
+
+/* handles a register request. This includes reporting errors that can be
+discovered client side, packaging packets and sending them to the server */
+void handle_user_register(command_t *node, user_t *user, request_t *request) {
+	int ret;
+	unsigned char *masterkey;
+	packet_t *packet;
+
+	if (node == NULL || node->command != COMMAND_REGISTER)
+		return;
+	if (user->is_logged) {
+		print_error("you cannot register a new account while logged in");
+		return;
+	}
+	if (request->is_request_active) {
+		print_error("there is already an active register request");
+		return;
+	}
+
+	strncpy(request->username, node->acc_details.username, strlen(node->acc_details.username));
+	masterkey = gen_master_key(node->acc_details.username, node->acc_details.password);
+	if (masterkey == NULL)
+		return;
+
+	memcpy(request->masterkey, masterkey, MASTER_KEY_LEN+1);
+	free(masterkey);
+
+	packet = gen_register_packet(node, request);
+	if (packet == NULL)
+		return;
+
+	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
+	if (ret < 1)	{
+		fprintf(stderr, "failed to send register packet\n");
+	}
+	else
+		request->is_request_active = true;
 }
 
 /* prints an error message stored in the parsed input struct*/

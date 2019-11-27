@@ -48,6 +48,7 @@ int create_server_socket(unsigned short port);
 int client_connect(const char *hostname, unsigned short port);
 int accept_connection(int serverfd);
 
+int send_packet_over_socket(SSL *ssl, int fd, packet_t *p);
 int read_packet_from_socket(SSL *ssl, int fd, unsigned char *buffer);
 packet_t *pack_packet(packet_hdr_t *header, unsigned char *payload);
 unsigned char *serialize_packet(packet_t *p);

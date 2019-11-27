@@ -94,6 +94,41 @@ int accept_connection(int serverfd) {
   return connfd;
 }
 
+static bool is_packet_legal(packet_t *p) {
+  return (p != NULL && p->header != NULL && p->payload != NULL);
+}
+
+/* serializes a packet and sends it over the network */
+int send_packet_over_socket(SSL *ssl, int fd, packet_t *p) {
+  int bytes_written, total = 0, size;
+  unsigned char *serialized;
+
+  if (!is_packet_legal(p)) {
+    free_packet(p);
+    return -1;
+  }
+
+  size = (int) (p->header->pckt_sz+HEADER_SIZE);
+
+  serialized = serialize_packet(p);
+  if (serialized == NULL)
+    return -1;
+
+  /* write to socket until the entire packet has been sent */
+  while (size > 0) {
+    bytes_written = ssl_block_write(ssl, fd, serialized+total, size);
+    if (bytes_written == -1) {
+      perror("failed to write over socket");
+      free(serialized);
+      return -1;
+    }
+    size -= bytes_written;
+  }
+
+  free(serialized);
+  return 1;
+}
+
 /* Reads a single packet from an ssl socket. It does not buffer what is
 in read*/
 int read_packet_from_socket(SSL *ssl, int fd, unsigned char *buffer) {
@@ -141,7 +176,7 @@ packet_t *pack_packet(packet_hdr_t *header, unsigned char *payload) {
   return p;
 }
 
-/* converts a packet struct in a byte stream of type unsigned char.
+/* converts a packet struct into a byte stream of type unsigned char.
 it automatically frees the packet passed to it*/
 unsigned char *serialize_packet(packet_t *p) {
   int size, index = 0;
@@ -150,13 +185,19 @@ unsigned char *serialize_packet(packet_t *p) {
 
   if (p == NULL)
     return NULL;
+  if (p->header == NULL || p->payload == NULL) {
+    free_packet(p);
+    return NULL;
+  }
 
   hdr = p->header;
   data = p->payload;
   size = (int) (HEADER_SIZE+hdr->pckt_sz);
   serialized = (unsigned char *) safe_malloc(sizeof(unsigned char) * size);
-  if (serialized == NULL)
+  if (serialized == NULL){
+    free_packet(p);
     return NULL;
+  }
 
   memcpy(serialized, &hdr->pckt_sz, sizeof(uint32_t));
   index += (int) sizeof(uint32_t);

@@ -60,3 +60,15 @@ The server can send the client data of variable size, depending on the nature of
   The size of this data is in the header.
 
 PROTOCOL:
+
+From client to server communication:
+
+Register packet:
+
+- 20 bytes for username
+- 32 bytes for hashed password (sha256)
+- 4 bytes for size of public key
+- variable size for public key
+- 16 bytes for initialization vector
+- 4 bytes for size of encrypted keys
+- variable size for encrypted keys
