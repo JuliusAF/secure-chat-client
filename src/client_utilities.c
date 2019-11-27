@@ -68,6 +68,7 @@ int read_stdin(char *buffer, int size) {
 	buffer[index] = '\0';
 	return bytes_read;
 }
+
 /* creates a date string from a given time_t struct */
 int create_date_string(char *date, time_t t) {
 	struct tm *tmp;
@@ -181,7 +182,8 @@ void handle_user_register(command_t *node, user_t *user, request_t *request) {
 		print_error("there is already an active register request");
 		return;
 	}
-
+	 /* inputs data calculated when the command is invoked, like the masterkey and
+	 the username the user entered */
 	strncpy(request->username, node->acc_details.username, strlen(node->acc_details.username));
 	masterkey = gen_master_key(node->acc_details.username, node->acc_details.password);
 	if (masterkey == NULL)
@@ -194,6 +196,8 @@ void handle_user_register(command_t *node, user_t *user, request_t *request) {
 	if (packet == NULL)
 		return;
 
+	/* if there were no errors, the register request was successfully sent to
+	the server */
 	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
 	if (ret < 1)	{
 		fprintf(stderr, "failed to send user register packet\n");
@@ -210,5 +214,86 @@ void print_error(char *s) {
 	printf("error: %s\n", s);
 }
 
-/* packets received from the server are dealt with here*/
-void handle_server_output(void);
+/* these functions deal with input from the server. This includes storing
+data obtained from the server if necessary and printing messages */
+
+/* takes as input client side meta data and the parsed input from the server
+socket and acts on the information accordingly */
+void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
+	printf("reached handle server input\n");
+	switch (p->id) {
+    case S_MSG_PUBMSG:
+      break;
+    case S_MSG_PRIVMSG:
+      break;
+    case S_MSG_USERS:
+      break;
+    case S_MSG_GENERIC_ERR:
+      break;
+    case S_META_LOGIN_PASS:
+			handle_server_log_pass(p, u, r);
+      break;
+    case S_META_LOGIN_FAIL:
+      break;
+    case S_META_REGISTER_PASS:
+			handle_server_log_pass(p, u, r);
+      break;
+    case S_META_REGISTER_FAIL:
+      break;
+    default:
+      break;
+  }
+
+}
+
+void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
+	printf("reached handle log pass\n");
+	int decrypt_sz, encrypt_sz;
+	unsigned char decrypted_keys[CHUNK], *encrypted_keys, *iv,
+	*masterkey;
+	keypair_t *keys = NULL;
+
+	if (!is_server_parsed_legal(p) ||
+			u == NULL || r == NULL ||
+			(p->id != S_META_LOGIN_PASS &&
+			p->id != S_META_REGISTER_PASS))
+		return;
+	if (!r->is_request_active) {
+		fprintf(stderr, "No active register request\n");
+		return;
+	}
+	if (u->is_logged) {
+		fprintf(stderr, "user is already logged in, can't process registration\n");
+		return;
+	}
+
+	iv = p->user_details.iv;
+	encrypt_sz = p->user_details.encrypt_sz;
+	encrypted_keys = p->user_details.encrypted_keys;
+	masterkey = r->masterkey;
+
+	if (encrypt_sz > CHUNK)
+		fprintf(stderr, "encrypted keys too large, can't decrypt\n");
+
+	decrypt_sz = apply_aes(decrypted_keys, encrypted_keys, encrypt_sz, masterkey, iv, DECRYPT);
+	if (decrypt_sz < 0) {
+		fprintf(stderr, "failed to decrypt encrypted keys\n");
+	}
+
+	keys = deserialize_keypair(decrypted_keys, decrypt_sz);
+	if (keys == NULL)
+		return;
+
+	printf("private key: %s\n", keys->privkey);
+	printf("public key: %s\n", keys->pubkey);
+
+	if (strlen(r->username) > USERNAME_MAX)
+		return;
+	strncpy(u->username, r->username, strlen(r->username));
+	memcpy(u->masterkey, r->masterkey, MASTER_KEY_LEN);
+	u->masterkey[MASTER_KEY_LEN] = '\0';
+	u->rsa_keys = keys;
+	u->is_logged = true;
+	r->is_request_active = false;
+
+}

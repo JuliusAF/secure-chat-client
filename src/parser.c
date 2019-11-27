@@ -324,9 +324,17 @@ to the server */
 /* function takes as input a packet and parses it into the client_parsed_t struct */
 client_parsed_t *parse_client_input(packet_t *p) {
   int ret;
+  unsigned int packet_size;
   client_parsed_t *parsed;
 
   if (!is_packet_legal(p)) {
+    fprintf(stderr, "packet not legal in parse_client_input\n");
+    return NULL;
+  }
+
+  packet_size = p->header->pckt_sz + HEADER_SIZE;
+  if (packet_size > MAX_PACKET_SIZE) {
+    fprintf(stderr, "packet size larger than max in parse_client_input\n");
     return NULL;
   }
 
@@ -336,6 +344,8 @@ client_parsed_t *parse_client_input(packet_t *p) {
     return NULL;
 
   parsed->id = p->header->pckt_id;
+  /* sets the nodes of the parsed struct to null depending on packet id */
+  initialize_client_parsed(parsed);
 
   switch (parsed->id) {
     case C_MSG_EXIT:
@@ -365,18 +375,6 @@ client_parsed_t *parse_client_input(packet_t *p) {
   return parsed;
 }
 
-/* helper function to parse_client_register that initializes all pointers to NULL */
-static void initialize_client_reg_node(client_parsed_t *p) {
-  if (p == NULL || p->id != C_MSG_REGISTER)
-    return;
-
-  p->reg_packet.username = NULL;
-  p->reg_packet.hash_password = NULL;
-  p->reg_packet.pubkey = NULL;
-  p->reg_packet.iv = NULL;
-  p->reg_packet.encrypted_keys = NULL;
-}
-
 /* parses a register request packet into the client_parsed_t struct. It deserializes
 the packet whole checking for memory overflow errors etc.
 Returns:
@@ -397,9 +395,8 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
     fprintf(stderr, "register packet fails to meet minumum size requirement\n");
     return -1;
   }
-  /* sets the nodes of the parsed struct to null for type register coommand */
-  initialize_client_reg_node(parsed);
-  total = packet->header->pckt_sz + HEADER_SIZE;
+
+  total = packet->header->pckt_sz;
   payload = packet->payload;
   tmp = payload;
   tmpend = tmp + total;
@@ -461,8 +458,36 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
   return 1;
 }
 
+/* sets the pointers of the parsed struct to null for the type of the parsed struct
+passed to it */
+void initialize_client_parsed(client_parsed_t *p) {
+  if (p == NULL)
+    return;
 
-
+  switch (p->id) {
+    case C_MSG_EXIT:
+      break;
+    case C_MSG_LOGIN:
+      break;
+    case C_MSG_REGISTER:
+      p->reg_packet.username = NULL;
+      p->reg_packet.hash_password = NULL;
+      p->reg_packet.pubkey = NULL;
+      p->reg_packet.iv = NULL;
+      p->reg_packet.encrypted_keys = NULL;
+      break;
+    case C_MSG_PRIVMSG:
+      break;
+    case C_MSG_PUBMSG:
+      break;
+    case C_MSG_USERS:
+      break;
+    case C_META_PUBKEY_RQST:
+      break;
+    default:
+      break;
+  }
+}
 
 /* checks whether a given client_parsed_t struct has all of its variables
 properly allocated*/
@@ -535,20 +560,30 @@ to the client */
 
 
 /* parses a packet from server into the server_parsed_t struct and returns it */
-server_parsed_t parse_server_input(packet_t *p) {
+server_parsed_t *parse_server_input(packet_t *p) {
   int ret;
+  unsigned int packet_size;
   server_parsed_t *parsed;
 
-  if (p == NULL)
+  if (!is_packet_legal(p)) {
+    fprintf(stderr, "packet not legal in parse_server_input\n");
     return NULL;
+  }
+
+  packet_size = p->header->pckt_sz + HEADER_SIZE;
+  if (packet_size > MAX_PACKET_SIZE) {
+    fprintf(stderr, "packet size larger than max in parse_server_input\n");
+    return NULL;
+  }
 
   parsed = (server_parsed_t *) safe_malloc(sizeof(server_parsed_t));
   if (parsed == NULL)
-    return;
+    return NULL;
 
   parsed->id = p->header->pckt_id;
+  initialize_server_parsed(parsed);
 
-  switch (p->id) {
+  switch (parsed->id) {
     case S_MSG_PUBMSG:
       break;
     case S_MSG_PRIVMSG:
@@ -558,17 +593,24 @@ server_parsed_t parse_server_input(packet_t *p) {
     case S_MSG_GENERIC_ERR:
       break;
     case S_META_LOGIN_PASS:
+      ret = parse_server_userinfo(p, parsed);
       break;
     case S_META_LOGIN_FAIL:
       break;
     case S_META_REGISTER_PASS:
+      ret = parse_server_userinfo(p, parsed);
+      printf("return value of parse user info: %d\n", ret);
       break;
     case S_META_REGISTER_FAIL:
       break;
     default:
+      ret = -1;
       break;
   }
-
+  if (ret < 0) {
+    free_server_parsed(parsed);
+    return NULL;
+  }
   return parsed;
 }
 
@@ -580,22 +622,143 @@ Returns:
 1 on success*/
 
 int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed) {
-  int ret = -1;
+  unsigned int size;
+  unsigned char *tmp, *tmpend;
 
   if (!is_packet_legal(packet) || parsed == NULL ||
-      parsed->id != S_META_LOGIN_PASS ||
-      parsed->id != S_META_REGISTER_PASS)
+      (parsed->id != S_META_LOGIN_PASS &&
+      parsed->id != S_META_REGISTER_PASS))
     return -1;
 
+  size = packet->header->pckt_sz;
+  tmp = packet->payload;
+  tmpend = tmp + size;
 
-  return ret;
+  /* checks if the payload has the minimum required size of bytes*/
+  if ((tmp + IV_SIZE + sizeof(unsigned int)) > tmpend) {
+    fprintf(stderr, "user info packet fails to meet minimum size\n");
+    return -1;
+  }
+
+  parsed->user_details.iv = (unsigned char *) safe_malloc(sizeof(unsigned char) * IV_SIZE+1);
+  if (parsed->user_details.iv == NULL)
+    return -1;
+
+  memcpy(parsed->user_details.iv, tmp, IV_SIZE);
+  parsed->user_details.iv[IV_SIZE] = '\0';
+  tmp += IV_SIZE;
+  memcpy(&parsed->user_details.encrypt_sz, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+
+  /* check if the payload buffer overflows if the size of the keys is read from it */
+  if ((tmp + parsed->user_details.encrypt_sz) > tmpend) {
+    fprintf(stderr, "failed to copy encrypted keys in user info. would overflow\n");
+    return -1;
+  }
+
+  parsed->user_details.encrypted_keys =
+      (unsigned char *) safe_malloc(sizeof(unsigned char) * parsed->user_details.encrypt_sz+1);
+  if (parsed->user_details.encrypted_keys == NULL)
+    return -1;
+
+  memcpy(parsed->user_details.encrypted_keys, tmp, parsed->user_details.encrypt_sz);
+  parsed->user_details.encrypted_keys[parsed->user_details.encrypt_sz] = '\0';
+
+  return 1;
+}
+
+void initialize_server_parsed(server_parsed_t *p) {
+  if (p == NULL)
+    return;
+
+  switch (p->id) {
+    case S_MSG_PUBMSG:
+      break;
+    case S_MSG_PRIVMSG:
+      break;
+    case S_MSG_USERS:
+      break;
+    case S_MSG_GENERIC_ERR:
+      break;
+    case S_META_LOGIN_PASS:
+      p->user_details.iv = NULL;
+      p->user_details.encrypted_keys = NULL;
+      break;
+    case S_META_LOGIN_FAIL:
+      break;
+    case S_META_REGISTER_PASS:
+      p->user_details.iv = NULL;
+      p->user_details.encrypted_keys = NULL;
+      break;
+    case S_META_REGISTER_FAIL:
+      break;
+    default:
+      break;
+  }
 }
 
 /* checks if a given server_parsed_t struct has all pointers not NULL*/
-bool is_server_parsed_legal(server_parsed_t *p);
+bool is_server_parsed_legal(server_parsed_t *p) {
+  if (p == NULL)
+    return false;
+
+  switch (p->id) {
+    case S_MSG_PUBMSG:
+      break;
+    case S_MSG_PRIVMSG:
+      break;
+    case S_MSG_USERS:
+      break;
+    case S_MSG_GENERIC_ERR:
+      break;
+    case S_META_LOGIN_PASS:
+      if (p->user_details.iv == NULL ||
+          p->user_details.encrypted_keys == NULL)
+        return false;
+      break;
+    case S_META_LOGIN_FAIL:
+      break;
+    case S_META_REGISTER_PASS:
+      if (p->user_details.iv == NULL ||
+          p->user_details.encrypted_keys == NULL)
+        return false;
+      break;
+    case S_META_REGISTER_FAIL:
+      break;
+    default:
+      return false;
+  }
+  return true;
+}
 
 /* frees a given server_parsed_t struct */
 void free_server_parsed(server_parsed_t *p) {
   if (p == NULL)
     return;
+
+  switch (p->id) {
+    case S_MSG_PUBMSG:
+      break;
+    case S_MSG_PRIVMSG:
+      break;
+    case S_MSG_USERS:
+      break;
+    case S_MSG_GENERIC_ERR:
+      break;
+    case S_META_LOGIN_PASS:
+      free(p->user_details.iv);
+      free(p->user_details.encrypted_keys);
+      break;
+    case S_META_LOGIN_FAIL:
+      break;
+    case S_META_REGISTER_PASS:
+      free(p->user_details.iv);
+      free(p->user_details.encrypted_keys);
+      break;
+    case S_META_REGISTER_FAIL:
+      break;
+    default:
+      break;
+  }
+  free(p);
 }

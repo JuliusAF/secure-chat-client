@@ -70,6 +70,7 @@ typedef struct parsed_server_input {
       unsigned int encrypt_sz;
       unsigned char *encrypted_keys;
     } user_details;
+    
   };
 } server_parsed_t;
 
@@ -94,14 +95,17 @@ void free_node(command_t *node);
 /* functions for parsing packets received server side from the client */
 client_parsed_t *parse_client_input(packet_t *p);
 int parse_client_register(packet_t *packet, client_parsed_t *parsed);
+void initialize_client_parsed(client_parsed_t *p) ;
 bool is_client_parsed_legal(client_parsed_t *p);
 void free_client_parsed(client_parsed_t *p);
 
 /* functions for parsing packets sent from server to client*/
 
-server_parsed_t parse_server_input(packet_t *p);
+server_parsed_t *parse_server_input(packet_t *p);
 bool is_server_parsed_legal(server_parsed_t *p);
 int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed);
+void initialize_server_parsed(server_parsed_t *p);
+bool is_server_parsed_legal(server_parsed_t *p);
 void free_server_parsed(server_parsed_t *p);
 
 

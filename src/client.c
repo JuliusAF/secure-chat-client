@@ -34,17 +34,19 @@ static void verify_arguments(int argc, const char* argv[]) {
 int main(int argc, const char* argv[]) {
 	fd_set selectfds, activefds;
 	command_t *node;
-	char *input, *server_output;
+	char *input;
+	unsigned char *server_output;
 	unsigned short port;
 	int socketfd, maxfd, bytes_read;
 	user_t *user;
 	request_t *request;
+	packet_t *packet;
+	server_parsed_t *parsed;
 
 	verify_arguments(argc, argv);
 
 	port = (unsigned short) atoi(argv[2]);
 	socketfd = client_connect(argv[1], port);
-	server_output = (char *) safe_malloc(sizeof(char) * MAX_PACKET_SIZE+1);
 
 	const char cacertpath[] = "ttpkeys/ca-cert.pem";
 	SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
@@ -91,22 +93,26 @@ int main(int argc, const char* argv[]) {
 
 			node = parse_input(input);
 
-			handle_user_input(node, user, request);
-
-			//if (node != NULL && node->command != COMMAND_ERROR)
-			//	ssl_block_write(ssl, socketfd, input, strlen(input)+1);
-
 			if (node != NULL && node->command == COMMAND_EXIT) {
 				free_node(node);
 				free(input);
 				break;
 			}
+
+			handle_user_input(node, user, request);
+
 			free_node(node);
 			free(input);
 		}
 
 		if (FD_ISSET(socketfd, &selectfds) && ssl_has_data(ssl)) {
-			bytes_read = ssl_block_read(ssl, socketfd, server_output, MAX_PACKET_SIZE);
+			parsed = NULL;
+			packet = NULL;
+
+			server_output = (unsigned char *) safe_malloc(sizeof(char) * MAX_PACKET_SIZE+1);
+			if (server_output == NULL)
+				continue;
+			bytes_read = read_packet_from_socket(ssl, socketfd, server_output);
 			if (bytes_read < 0) {
 				perror("failed to read from server socket");
 				continue;
@@ -115,7 +121,23 @@ int main(int argc, const char* argv[]) {
 				printf("Lost connection to server. Closing client.\n");
 				break;
 			}
-			printf("%s\n", server_output);
+			printf("reached packet unpacking\n");
+			packet = unpack_packet(server_output, bytes_read);
+			printf("packet id: %d\n", packet->header->pckt_id);
+			if (packet == NULL)
+				goto cleanup;
+			printf("reached packet parsing\n");
+			parsed = parse_server_input(packet);
+			if (parsed == NULL)
+				goto cleanup;
+
+			handle_server_input(parsed, user, request);
+
+			cleanup:
+
+			free_packet(packet);
+			free_server_parsed(parsed);
+			free(server_output);
 		}
 	}
 
@@ -123,7 +145,6 @@ int main(int argc, const char* argv[]) {
   SSL_CTX_free(ctx);
 	free(user);
 	free(request);
-	free(server_output);
 	close(socketfd);
 	return 0;
 }

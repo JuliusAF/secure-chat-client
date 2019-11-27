@@ -114,8 +114,8 @@ int send_packet_over_socket(SSL *ssl, int fd, packet_t *p) {
   serialized = serialize_packet(p);
   if (serialized == NULL)
     return -1;
-  printf("printinf serialized\n");
-  write(1, serialized, size);
+  //printf("printinf serialized\n");
+  //write(1, serialized, size);
   printf("\n");
   /* write to socket until the entire packet has been sent */
   while (size > 0) {
@@ -139,7 +139,6 @@ int read_packet_from_socket(SSL *ssl, int fd, unsigned char *buffer) {
   unsigned int packet_sz;
   uint32_t data_size;
 
-  printf("reached read function\n");
   /* continues to read from socket until the complete header is read*/
   while (total < (int) HEADER_SIZE) {
     bytes_read = ssl_block_read(ssl, fd, buffer+total, HEADER_SIZE-total);

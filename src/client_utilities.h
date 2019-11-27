@@ -30,17 +30,17 @@ typedef struct login_request {
 user_t *initialize_user_info(SSL *ssl, int connfd);
 request_t *initialize_request(void);
 int read_stdin(char *buffer, int size);
+
+/* these functions deal with input from the user through stdin and
+sending any necessary data to the server */
 int create_date_string(char *date, time_t t);
 int create_formatted_msg(char *msg, command_t *n, user_t *u);
-
 void handle_user_input(command_t *n, user_t *u, request_t *r);
-
 void handle_user_register(command_t *node, user_t *uuser, request_t *request);
 void print_error(char *s);
 
-
-
-
-void handle_server_output(void);
+/* the functions handle packets coming from the server over the socket */
+void handle_server_input(server_parsed_t *p, user_t *u, request_t *r);
+void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r);
 
 #endif

@@ -11,7 +11,12 @@
 #include "client_utilities.h"
 
 /* turns a keypair struct into a byte stream. This will be later encrypted
-using AES*/
+using AES
+The formated of the serialization is:
+- the size of the private key
+- the private key
+- the size of the public key
+- the public key*/
 unsigned char *serialize_keypair(keypair_t *k, int size) {
   int index;
   unsigned char *serialized;
@@ -24,15 +29,69 @@ unsigned char *serialize_keypair(keypair_t *k, int size) {
     return NULL;
 
   /* copy the individual fields into their respective positions*/
-  memcpy(serialized, &k->privlen, sizeof(int));
-  index = sizeof(int);
+  memcpy(serialized, &k->privlen, sizeof(unsigned int));
+  index = sizeof(unsigned int);
   memcpy(serialized+index, k->privkey, k->privlen);
   index += k->privlen;
-  memcpy(serialized+index, &k->publen, sizeof(int));
-  index += sizeof(int);
+  memcpy(serialized+index, &k->publen, sizeof(unsigned int));
+  index += sizeof(unsigned int);
   memcpy(serialized+index, k->pubkey, k->publen);
 
   return serialized;
+}
+
+/* converts a byte stream containing the key pair back into a keypair_t struct.
+The format of the bytes is privlen, privkey, publen, punkey */
+
+keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
+  unsigned char *tmp, *tmpend;
+  keypair_t *keypair = NULL;
+
+  if (serialized == NULL ||size < 0)
+    return NULL;
+
+  keypair = (keypair_t *) safe_malloc(sizeof(keypair_t));
+  if (keypair == NULL)
+    return NULL;
+  keypair->privkey = NULL;
+  keypair->pubkey = NULL;
+
+  tmp = serialized;
+  tmpend = tmp + size;
+
+  memcpy(&keypair->privlen, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  if ((tmp + keypair->privlen + sizeof(unsigned int)) > tmpend) {
+    fprintf(stderr, "can't copy private key, would overflow \n");
+    free_keypair(keypair);
+    return NULL;
+  }
+
+  keypair->privkey = (char *) safe_malloc(sizeof(char) * keypair->privlen+1);
+  if (keypair->privkey == NULL) {
+    free_keypair(keypair);
+    return NULL;
+  }
+  memcpy(keypair->privkey, tmp, keypair->privlen);
+  tmp += keypair->privlen;
+  keypair->privkey[keypair->privlen] = '\0';
+  memcpy(&keypair->publen, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  if ((tmp + keypair->publen) > tmpend) {
+    fprintf(stderr, "can't copy public key, would overflow\n");
+    free_keypair(keypair);
+    return NULL;
+  }
+
+  keypair->pubkey = (char *) safe_malloc(sizeof(char) * keypair->publen+1);
+  if (keypair->pubkey == NULL) {
+    free_keypair(keypair);
+    return NULL;
+  }
+  memcpy(keypair->pubkey, tmp, keypair->publen);
+  keypair->pubkey[keypair->publen] = '\0';
+
+  return keypair;
 }
 
 /* serializes all of the components of a register packet. This includes the username and password
