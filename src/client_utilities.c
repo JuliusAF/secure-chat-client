@@ -190,22 +190,16 @@ void handle_user_register(command_t *node, user_t *user, request_t *request) {
 	memcpy(request->masterkey, masterkey, MASTER_KEY_LEN+1);
 	free(masterkey);
 
-	packet = gen_register_packet(node, request);
+	packet = gen_c_register_packet(node, request);
 	if (packet == NULL)
 		return;
 
 	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
 	if (ret < 1)	{
-		fprintf(stderr, "failed to send register packet\n");
+		fprintf(stderr, "failed to send user register packet\n");
 	}
 	else
 		request->is_request_active = true;
-}
-
-/* prints an error message stored in the parsed input struct*/
-void print_parse_error(command_t *n) {
-  if(n != NULL && n->command == COMMAND_ERROR)
-    printf("error: %s\n", n->error_message);
 }
 
 /* prints a custom error message*/

@@ -11,6 +11,7 @@
 #include "parser.h"
 #include "network.h"
 #include "server_utilities.h"
+#include "server_network.h"
 #include "safe_wrappers.h"
 #include "database.h"
 
@@ -28,10 +29,12 @@ static client_t *initialize_client_info(int connfd, SSL *ssl) {
 
 void worker(int connfd, int from_parent[2], int to_parent[2]) {
 	fd_set selectfds, activefds;
-	char *input, pipe_input;
-	int maxfd, bytes_read, rc;
-	command_t *node = NULL;
+	char pipe_input;
+  unsigned char *input;
+	int maxfd, bytes_read;
   client_t *client_info;
+  packet_t *packet;
+  client_parsed_t *parsed;
 
   const char pathcert[] = "serverkeys/server-ca-cert.pem";
   const char pathkey[] = "serverkeys/server-key.pem";
@@ -45,7 +48,6 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
   ssl_block_accept(ssl, connfd);
 
   client_info = initialize_client_info(connfd, ssl);
-  input = (char *) safe_malloc(sizeof(char) * MAX_PACKET_SIZE+1);
 	close(from_parent[1]);
 	close(to_parent[0]);
 
@@ -59,9 +61,19 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 		select(maxfd+1, &selectfds, NULL, NULL, NULL);
 
 		if (FD_ISSET(connfd, &selectfds) && ssl_has_data(ssl)) {
-			bytes_read = ssl_block_read(ssl, connfd, input, MAX_PACKET_SIZE);
+      parsed = NULL;
+      packet = NULL;
+      input = NULL;
+
+      printf("input from client socket\n");
+      input = (unsigned char *) safe_malloc(sizeof(unsigned char) * MAX_PACKET_SIZE);
+      if (input == NULL)
+        continue;
+      bytes_read = read_packet_from_socket(ssl, connfd, input);
+			//bytes_read = ssl_block_read(ssl, connfd, input, MAX_PACKET_SIZE);
 			if (bytes_read < 0) {
 				perror("failed to read bytes");
+        free(input);
 				continue;
 			}
 			else if (bytes_read == 0) {
@@ -70,19 +82,30 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
         close(connfd);
 				break;
 			}
+      printf("number of bytes read = %d\n", bytes_read);
+      write(1, input, bytes_read);
+      printf("\n");
 
-			input[bytes_read] = '\0';
-			node = parse_input(input);
-      if (node == NULL)
-        continue;
+      packet = unpack_packet(input, bytes_read);
+      if (packet == NULL)
+        goto cleanup;
 
-      rc = handle_client_input(node, client_info, to_parent[1]);
-      if (rc == COMMAND_EXIT) {
-        free_node(node);
-        break;
-      }
+      printf("util packet header size = %d\n", packet->header->pckt_sz);
+      printf("util packet header id = %d\n", packet->header->pckt_id);
 
-			free_node(node);
+      parsed = parse_client_input(packet);
+      if (parsed == NULL)
+        goto cleanup;
+
+
+      printf("util parsed id = %d\n", parsed->id);
+      handle_client_input(parsed, client_info, to_parent[1]);
+
+      cleanup:
+
+      free_client_parsed(parsed);
+      free_packet(packet);
+      free(input);
 		}
     /* If the server notifies
     the worker that the database has been updated, the worker
@@ -102,50 +125,64 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 	free(input);
 }
 
-/* This function handles the input from the client. Right now plain text is sent
-over the socket and is parsed again using the same parsing function. Once the protocol
-is finished, the packet sent from the client will be deserialized. The returned structure is
-still of type command_t.*/
-int handle_client_input(command_t *node, client_t *client_info, int pipefd) {
-  int rc;
+void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd) {
 
-  if (node == NULL)
-    return -1;
+  if (!is_client_parsed_legal(p))
+    return;
 
-  switch (node->command) {
-    case COMMAND_LOGIN:
-      rc = handle_db_login(node, client_info);
-      if (rc == COMMAND_LOGIN) {
-        fetch_db_message(client_info);
-      }
+  switch (p->id) {
+    case C_MSG_EXIT:
       break;
-    case COMMAND_REGISTER:
-      rc = handle_db_register(node, client_info);
-      if (rc == COMMAND_REGISTER) {
-        fetch_db_message(client_info);
-      }
+    case C_MSG_LOGIN:
       break;
-    case COMMAND_PRIVMSG:
-      //rc = handle_db_privmsg(node, user, connfd);
+    case C_MSG_REGISTER:
+      handle_client_register(p, client_info);
       break;
-    case COMMAND_PUBMSG:
-      rc = handle_db_pubmsg(node, client_info);
-      if (rc == COMMAND_PUBMSG) {
-        write(pipefd, S_MSG_UPDATE, S_MSG_LEN);
-      }
+    case C_MSG_PRIVMSG:
       break;
-    case COMMAND_USERS:
-      //rc = handle_db_users(user, connfd);
+    case C_MSG_PUBMSG:
       break;
-    case COMMAND_EXIT:
-      rc = handle_db_exit(client_info);
-      if (rc == COMMAND_EXIT) {
-        write(pipefd, S_MSG_CLOSE, S_MSG_LEN);
-        close(client_info->connfd);
-      }
+    case C_MSG_USERS:
+      break;
+    case C_META_PUBKEY_RQST:
       break;
     default:
       break;
   }
-  return rc;
+}
+
+void handle_client_register(client_parsed_t *p, client_t *client_info) {
+  int ret;
+  char err[300] = "";
+  packet_t *packet = NULL;
+  fetched_userinfo_t *fetched = NULL;
+
+  if (!is_client_parsed_legal(p) || client_info == NULL)
+    return;
+
+  ret = handle_db_register(p, client_info, err);
+  printf("handle register return value: %d\n", ret);
+  if (ret < 0) {
+    packet = gen_s_error_packet(S_META_REGISTER_FAIL, err);
+    ret = send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
+    if (ret < 1)
+  		fprintf(stderr, "failed to send user register error packet\n");
+    return;
+  }
+  else if (ret == 0)
+    return;
+  //create register packet
+  fetched = fetch_db_user_info(client_info);
+  if (!is_fetched_userinfo_legal(fetched)) {
+    fprintf(stderr, "failed to fetch register user data\n");
+    goto cleanup;
+  }
+  packet = gen_s_userinfo_packet(fetched, S_META_REGISTER_PASS);
+  ret = send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
+  if (ret < 1)
+    fprintf(stderr, "failed to send user register info packet\n");
+
+  cleanup:
+
+  free_fetched_userinfo(fetched);
 }

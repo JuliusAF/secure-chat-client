@@ -1,12 +1,18 @@
 #ifndef CRYPTOGRAPHY_H
 #define CRYPTOGRAPHY_H
 
+/* maximum size for rsa signature*/
 #define MAX_SIG_SZ 256
+
 /* definitions for creation of client master key*/
 #define MASTER_KEY_LEN 16
 #define ITERATION 10000
 
+/* size of the init vector passed to the AES algorithm*/
 #define IV_SIZE 16
+
+/* size of the salt used for hashing passwords from clients */
+#define SALT_SIZE 32
 
 #define ENCRYPT 1
 #define DECRYPT 0
@@ -19,8 +25,8 @@ when an ssl connection is established*/
 #define SERVER_COMMON_NAME "server.example.com"
 
 typedef struct rsa_keypairs {
-  int privlen;
-  int publen;
+  unsigned int privlen;
+  unsigned int publen;
   char *privkey;
   char *pubkey;
 } keypair_t;

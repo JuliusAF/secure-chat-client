@@ -91,10 +91,10 @@ int main(int argc, const char* argv[]) {
 
 			node = parse_input(input);
 
-			print_parse_error(node);
+			handle_user_input(node, user, request);
 
-			if (node != NULL && node->command != COMMAND_ERROR)
-				ssl_block_write(ssl, socketfd, input, strlen(input)+1);
+			//if (node != NULL && node->command != COMMAND_ERROR)
+			//	ssl_block_write(ssl, socketfd, input, strlen(input)+1);
 
 			if (node != NULL && node->command == COMMAND_EXIT) {
 				free_node(node);
@@ -121,6 +121,8 @@ int main(int argc, const char* argv[]) {
 
 	SSL_free(ssl);
   SSL_CTX_free(ctx);
+	free(user);
+	free(request);
 	free(server_output);
 	close(socketfd);
 	return 0;

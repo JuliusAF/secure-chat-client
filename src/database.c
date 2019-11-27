@@ -5,10 +5,12 @@
 #include <sqlite3.h>
 #include <time.h>
 #include <openssl/ssl.h>
+#include "cryptography.h"
 #include "ssl-nonblock.h"
 #include "server_utilities.h"
 #include "database.h"
 #include "parser.h"
+#include "safe_wrappers.h"
 
 /* a lot of these functions are bloated with functionality that I will refactor
 into other functions. I have not yet had the time. This includes things like sending
@@ -57,10 +59,16 @@ int initialize_database() {
   if (db == NULL)
 		return -1;
 
-  sql = "CREATE TABLE IF NOT EXISTS Users(" \
-        "Username  TEXT PRIMARY KEY   NOT NULL," \
-        "Password               TEXT  NOT NULL," \
-        "Status                 INT  NOT NULL );";
+  sql = "CREATE TABLE IF NOT EXISTS USERS(" \
+        "USERNAME  TEXT PRIMARY KEY   NOT NULL," \
+        "PASSWORD               BLOB  NOT NULL," \
+        "SALT                   BLOB  NOT NULL," \
+        "PUBKEY                 BLOB  NOT NULL," \
+        "PUBKEY_LEN             INT   NOT NULL," \
+        "IV                     BLOB  NOT NULL," \
+        "KEYPAIR                BLOB  NOT NULL," \
+        "KEYPAIR_LEN            INT   NOT NULL," \
+        "STATUS                 INT   NOT NULL );";
 
   rc = sqlite3_exec(db, sql, 0, 0, &err_msg);
 
@@ -71,11 +79,14 @@ int initialize_database() {
     return -1;
   }
 
-  sql = "CREATE TABLE IF NOT EXISTS Messages(" \
-        "Timestamp            INT   NOT NULL," \
-        "Sender               TEXT  NOT NULL," \
-        "Recipient            TEXT," \
-        "Message              TEXT  NOT NULL );";
+  sql = "CREATE TABLE IF NOT EXISTS MESSAGES(" \
+        "SENDER               TEXT  NOT NULL," \
+        "RECIPIENT            TEXT," \
+        "MESSAGE              BLOB  NOT NULL," \
+        "MESSAGE_LEN          INT   NOT NULL," \
+        "IV                   BLOB," \
+        "S_SYMKEY             BLOB," \
+        "R_SYMKEY             BLOB );";
 
   rc = sqlite3_exec(db, sql, 0, 0, &err_msg);
 
@@ -86,8 +97,8 @@ int initialize_database() {
     return -1;
   }
 
-  /* If the server has just started, clients cannot be connected. It sets ther status to offline*/
-  sql = "UPDATE Users SET Status = 0";
+  /* If the server has just started, clients cannot be connected. It sets their status to offline*/
+  sql = "UPDATE USERS SET STATUS = 0";
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc != SQLITE_OK) {
     fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
@@ -121,35 +132,36 @@ msg_components *initialize_msg_components() {
   return m;
 }
 
+/* this function finds the maxmimum inate row id in the MESSAGES table
+when this database connection is opened */
 signed long long get_latest_msg_rowid(void) {
-  signed long long rowid;
+  signed long long rowid = -1;
   int rc, step;
   char *sql;
-  sqlite3_stmt *res;
-  sqlite3 *db;
+  sqlite3_stmt *res = NULL;
+  sqlite3 *db = NULL;
 
   db = open_database();
   if (db == NULL)
     return -1;
 
-  sql = "SELECT MAX(ROWID) FROM Messages";
+  sql = "SELECT MAX(ROWID) FROM MESSAGES";
 
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc != SQLITE_OK) {
     fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
-    sqlite3_close(db);
-    return -1;
+    goto cleanup;
   }
 
   step = sqlite3_step(res);
   if (step != SQLITE_ROW) {
     fprintf(stderr, "Failed to execute statement: %s \n", sqlite3_errmsg(db));
-    sqlite3_finalize(res);
-    sqlite3_close(db);
-    return -1;
+    goto cleanup;
   }
 
   rowid = (signed long long) sqlite3_column_int64(res, 0);
+
+  cleanup:
 
   sqlite3_finalize(res);
   sqlite3_close(db);
@@ -252,87 +264,105 @@ int handle_db_login(command_t *node, client_t *client_info) {
   return COMMAND_LOGIN;
 }
 
-
-/* This function handles a login call to the server. It checks for a variety
+/* This function handles a register call to the server. It checks for a variety
 of errors that can occur, such as already being logged in etc.*/
 
-int handle_db_register(command_t *node, client_t *client_info) {
-  char msg[200], *sql, name[USERNAME_MAX+1], password[PASSWORD_MAX+1];
-  int rc, step;
-  sqlite3_stmt *res;
-  sqlite3 *db;
+int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err_msg) {
+  char *sql, *name, *pubkey;
+  unsigned char *pass, *iv, *keys,
+  *salt = NULL, *hashed_pass = NULL;
+  int ret = -1, rc, step, publen, keyslen;
+  sqlite3_stmt *res = NULL;
+  sqlite3 *db = NULL;
+
+  if(!is_client_parsed_legal(parsed))
+    return 0;
 
   db = open_database();
   if (db == NULL)
-    return -1;
+    return 0;
 
-  /* checks if the user is logged in*/
   if (client_info->is_logged) {
-    strcpy(msg, "error: you cannot register a new account while logged in");
-    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
-    sqlite3_close(db);
-    return -1;
+    strcpy(err_msg, "you cannot register a new account while logged in");
+    goto cleanup;
   }
 
+  name = parsed->reg_packet.username;
+  pass = parsed->reg_packet.hash_password;
+  publen = parsed->reg_packet.publen;
+  pubkey = parsed->reg_packet.pubkey;
+  iv = parsed->reg_packet.iv;
+  keyslen = parsed->reg_packet.encrypt_sz;
+  keys = parsed->reg_packet.encrypted_keys;
+
   /* This query is used to check if a given username already exists in the db*/
-  sql = "SELECT * FROM Users WHERE Username = ?";
+  sql = "SELECT * FROM USERS WHERE USERNAME = ?";
 
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK) {
-    strcpy(name, node->acc_details.username);
     sqlite3_bind_text(res, 1, name, -1, SQLITE_STATIC);
   }
   else {
     fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
-    sqlite3_close(db);
-    return -1;
+    ret = 0;
+    goto cleanup;
   }
 
   step = sqlite3_step(res);
   if (step == SQLITE_ROW) {
-    strcpy(msg, "error: user ");
-    strcat(msg, node->acc_details.username);
-    strcat(msg, " already exists");
-    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
-    sqlite3_close(db);
-    return -1;
+    strcpy(err_msg, "user by that name already exists");
+    goto cleanup;
   }
   sqlite3_finalize(res);
+  res = NULL;
+
+  salt = create_rand_salt(SALT_SIZE);
+  hashed_pass = hash_password( (char *) pass, SHA256_DIGEST_LENGTH, salt, SALT_SIZE);
+  if (salt == NULL || hashed_pass == NULL)
+    goto cleanup;
 
   /* If there are no errors the users identification is input into the db and
   their status is set to online automatically */
-  sql = "INSERT INTO Users VALUES(?, ?, 1)";
+  sql = "INSERT INTO USERS VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1)";
 
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK) {
-    strcpy(name, node->acc_details.username);
-    strcpy(password, node->acc_details.password);
     sqlite3_bind_text(res, 1, name, -1, SQLITE_STATIC);
-    sqlite3_bind_text(res, 2, password, -1, SQLITE_STATIC);
+    sqlite3_bind_blob(res, 2, hashed_pass, SHA256_DIGEST_LENGTH, SQLITE_STATIC);
+    sqlite3_bind_blob(res, 3, salt, SALT_SIZE, SQLITE_STATIC);
+    sqlite3_bind_blob(res, 4, pubkey, publen, SQLITE_STATIC);
+    sqlite3_bind_int(res, 5, publen);
+    sqlite3_bind_blob(res, 6, iv, IV_SIZE, SQLITE_STATIC);
+    sqlite3_bind_blob(res, 7, keys, keyslen, SQLITE_STATIC);
+    sqlite3_bind_int(res, 8, keyslen);
   }
   else {
     fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
-    sqlite3_close(db);
-    return -1;
+    ret = 0;
+    goto cleanup;
   }
 
   step = sqlite3_step(res);
   if (step != SQLITE_DONE) {
     fprintf(stderr, "Failed to execute statement: %s \n", sqlite3_errmsg(db));
-    sqlite3_close(db);
-    return -1;
+    ret = 0;
+    goto cleanup;
   }
-  strcpy(msg, "registration succeeded");
-  ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
 
   /* client is now logged in so the struct is updated*/
   client_info->is_logged = true;
-  strcpy(client_info->username, node->acc_details.username);
+  strcpy(client_info->username, name);
+  ret = 1;
 
+  cleanup:
+
+  free(salt);
+  free(hashed_pass);
   sqlite3_finalize(res);
   sqlite3_close(db);
-  return COMMAND_REGISTER;
+  return ret;
 }
+
 
 int handle_db_privmsg(command_t *node, client_t *client_info);
 
@@ -550,4 +580,89 @@ void create_db_message(char *dest, msg_components *comps) {
     strcat(dest, ": ");
   }
   strcat(dest, comps->message);
+}
+
+/* fetches all the information that is relevant to a user when they log
+in to the server. This includes the initialization vector used to encrypt the
+public and private keys, the size of the encrypted keys and the encrypted keys
+themselves. These are stored in a stuct and return upon successful execution*/
+fetched_userinfo_t *fetch_db_user_info(client_t *client_info) {
+  char *sql;
+  const unsigned char *tmp;
+  int rc, step, size;
+  fetched_userinfo_t *fetched;
+  sqlite3_stmt *res = NULL;
+  sqlite3 *db = NULL;
+
+  if (client_info->is_logged == false || client_info == NULL ||
+      strlen(client_info->username) == 0)
+    return NULL;
+
+  fetched = (fetched_userinfo_t *) safe_malloc(sizeof(fetched_userinfo_t));
+  if (fetched == NULL)
+    return NULL;
+  fetched->encrypted_keys = NULL;
+
+  db = open_database();
+  if (db == NULL)
+    goto cleanup;
+
+  /* select the relevant columns from the table for the user who is currently logged in */
+  sql = "SELECT IV, KEYPAIR, KEYPAIR_LEN FROM USERS WHERE USERNAME = ?1";
+
+  rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
+  if (rc == SQLITE_OK) {
+    sqlite3_bind_text(res, 1, client_info->username, -1, SQLITE_STATIC);
+  }
+  else {
+    fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
+    goto cleanup;
+  }
+
+  step = sqlite3_step(res);
+  if (step == SQLITE_ROW) {
+    size = sqlite3_column_bytes(res, 0);
+    if (size != IV_SIZE) {
+      fprintf(stderr, "incorrect IV size for fetch user data \n");
+      goto cleanup;
+    }
+    tmp = sqlite3_column_blob(res, 0);
+    memcpy(fetched->iv, tmp, IV_SIZE);
+    fetched->iv[IV_SIZE] = '\0';
+
+    size = (unsigned int) sqlite3_column_int(res, 2);
+    if (size != sqlite3_column_bytes(res, 1)) {
+      fprintf(stderr, "incorrect encrypted key length for user data\n");
+      goto cleanup;
+    }
+    fetched->encrypt_sz = size;
+    printf("size of stored encrypted keys: %d vs %d\n", size, sqlite3_column_bytes(res, 1));
+    fetched->encrypted_keys = (unsigned char *) safe_malloc(sizeof(unsigned char) * size);
+    if (fetched->encrypted_keys == NULL)
+      goto cleanup;
+    tmp = sqlite3_column_blob(res, 1);
+    memcpy(fetched->encrypted_keys, tmp, size);
+    fetched->encrypted_keys[size] = '\0';
+  }
+
+  cleanup:
+
+  sqlite3_finalize(res);
+  sqlite3_close(db);
+  return fetched;
+}
+
+/* checks whether a fetched_userinfo_t struct is valid i.e has all pointers
+not NULL*/
+bool is_fetched_userinfo_legal(fetched_userinfo_t *f) {
+  return (f != NULL && f->encrypted_keys != NULL);
+}
+
+/* frees a given fetched_userinfo_t struct*/
+void free_fetched_userinfo(fetched_userinfo_t *f) {
+  if (f == NULL)
+    return;
+
+  free(f->encrypted_keys);
+  free(f);
 }

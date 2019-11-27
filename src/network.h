@@ -6,7 +6,7 @@
 #include "parser.h"
 #include "cryptography.h"
 
-#define MAX_PACKET_SIZE 2048
+#define MAX_PACKET_SIZE 4096
 #define MAX_PAYLOAD_SIZE (MAX_PACKET_SIZE - HEADER_SIZE)
 
 /* define the id codes for packets from clients to server */
@@ -50,6 +50,7 @@ int accept_connection(int serverfd);
 
 int send_packet_over_socket(SSL *ssl, int fd, packet_t *p);
 int read_packet_from_socket(SSL *ssl, int fd, unsigned char *buffer);
+bool is_packet_legal(packet_t *p);
 packet_t *pack_packet(packet_hdr_t *header, unsigned char *payload);
 unsigned char *serialize_packet(packet_t *p);
 packet_t *unpack_packet(unsigned char *buffer, int size);

@@ -1,69 +1,84 @@
-As of right now, the application does not implement any proper network protocol. It simply sends plain text over the network, and this is parsed both on the server and the client side. I assumed that getting the application to (mostly) work would be more important, even if the network protocol is not fully developed. As it stands, adding the network protocol such as (de)serializing structs, adding and removing metadata and concatenating them into one packet should only add another layer to the program. The types the application uses right now to access the database etc. will remained
-unchanged. I will add the planned implementation of the networking stuff at the bottom.
+# DATABASE
 
-Almost all basic functionalities work if commands are input through the terminal, but I couldn't get automatic testing to work. If I exit the program after end of file I can not catch messages sent from the server in time. The problem is that I exit my program when stdin reaches end of file, and when input is entered from a file, I'm guessing exiting of the program happens too fast to catch the data sent from the server since they are all in the same loop. The other problem is that because of the lack of network protocol, the reading of the plain text over the sockets causes information to be lost. As such, it is failing to properly display all the past messages when a user logs in as some of these messages are lost.
+The database contains two tables; USERS and MESSAGES respectively. It is created in database.c with the function initialize_database();
 
-SECURITY:
+### USERS:
 
-Parsing:
+The USERS table contains the following fields:
 
-The client program parses all user input according to the rules specified in the assignment documentation. It sets a maximum length for usernames, passwords and messages (parser.h) that is utilized through the rest of the program. This should make it harder to have buffer overflows.
+- Username
+- Hashed password
+- Salt used to hash password
+- Public key
+- Length of the public key
+- initialization vector used during key pair encryption
+- Encrypted key pair
+- Length of encrypted key pair
+- Status of user (0 == offline, 1 == online)
 
-The parser creates a node that describes the user input. Along with a type for each of the commands, it includes an error type that contains an error string explaining what is wrong about the user input. I have tested the parser relatively extensively and it should be able to find every user input that does no conform to the declared syntax.
+The database stores the salt so that on login attempts the given password can be hashed with the respective salt.
 
-Network:
+The public key is stored so that when two clients want to create an end-to-end encrypted message, the sender can request the public key of the recipient.
 
-Because I have not yet implemented a proper network protocol, there is little in the way of security measures. The one thing I do is parse the input from the client in the same way the client parses input from the user.
+The encrypted key pair can not be decrypted without access to the original password the user entered. It is sent from the server to the client on a successful login or register attempt. This links the client with their RSA key pair.
 
-Database:
+The sizes for the public key and encrypted key pair is stored for verification purposes when sqlite3 returns the blob of either of these two fields.
 
-I have never used sqlite3 before so I lack a lot of knowledge on safety aspects as well as good ways to format the sqlite3 code and the sql statements. I have read that using the sqlite3_bind operators on a prepared statement is a good way to combat SQL injections, which I have attempted to do.
+### MESSAGES:
 
-Right now passwords are stored as plain text in the database. This will be changed, such as storing the hashes of passwords instead of the passwords themselves.
+# CRYPTOGRAPHY:
+
+Various cryptography protocols are adopted in order to meet the security requirements.
+
+SSL is utilized to verify the server when a client connects to it. This ensures the integrity of data sent from client to server. The client verifies both the server certificate stored in serverkeys/ and the common name of the expected server with that of the name in the certificate. The expected common name is stored in cryptography.h.
+
+Whenever a user logs in, they create a master key that is a function of the submitted plaintext username and password. This masterkey is used to encrypt and decrypt the RSA key pair that belongs to that user. This key pair is stored in the database and retrieved on login. The plaintext password is never saved, nor is it transmitted to the server. As such, the only way the masterkey can be computed is on the client side when a register or login command is invoked. The encryption method used is AES-128-CBC and utilizes a random initialization vector that is also stored on the server. This means the server can not decrypt the key pair, and an attacker would have to gain access to the memory of the client program to access the master key.
+
+The password of a user is hashed twice:
+
+- First on the client side before it is sent over to the server. This is without a salt simply to offer basic protection for the users plaintext.
+- The password is hashed again on the server side before it is stored/used for comparison. This hash is with a salt, which is also stored in the database.
+- The hashing algorithm used is SHA256.
+
+Messages between clients (private messages) are end-to-end encrypted:
+
+(sender refers to the client that started the private message request)
+
+- The sender asks the server for the recipients public key.
+- The sender creates a random key and initialization vector.
+- The sender encrypts the message using AES-128-CBC with the random key and IV.
+- The sender creates two copies of the random key. One copy is encrypted with the senders public key, and the other is encrypted with the recipients public key.
+- This is all sent to the server and stored in the database
+
+The server can therefore not decrypt a private message, and in the event of a database breach the confidentiality of the messages is ensured.
 
 
+# PROTOCOL:
 
+The messages sent from server to client and from client to server differ depending on the type of message sent. However, each packet has a fixed header as described below:
 
+The size of the header is defined in network.h under HEADER_SIZE
+The header consists of:
 
-PLANNED PROTOCOL:
+- 4 bytes for length of data
+- 2 bytes for identification code
+- 256 bytes for the signature. This field may be left empty depending on what type of packet is sent and from/to whom
 
-Each packet will contain a header of fixed size that includes the following:
-- Four bytes that act as an identification number for the packet
-- Two bytes to indicate the size of the data
-- Four bytes that contain a checksum to error check the packet
-- Eight bytes that contain an identification string that specifies what the
-  nature of the data in the packet is. This is different based on whether the packet
-  came from client to server or vice versa.
+## From client to server communication:
 
-CLIENT TO SERVER
+The following section describes the types of packets sent from client to server. These differ depending on the command invoked. The possible commands are exit, login, register, public message, private message and users.
 
-For client to server communication, the client sends parsed input data to the server, with the length and content of the data part of the packet mostly fixed to one size. There are only three possibilities for variable user input that does not include the command literals (such as "/exit"). These are a username, a password and a message. Dependent on the command invoked, some or none of these fields receive input. The maximum sizes (in bytes) for each variable input is:
-- Username = 20
-- Password = 24 (this number will likely change because passwords will be transmitted as their hashes)
-- Message = 200
+### Exit command:
 
-As such, the data part of the packet sent from client to server is a serialized unsigned char array with a fixed length of 252 bytes. The make up of the data is as follows:
-- The first sizeof(int) bytes contain the code that corresponds to the type of message
-  that is being sent in the packet.
-- The next 20 bytes contain the username
-- the next 24 bytes contain the password
-- The next 200 bytes contain the message
+The exit command need not be transmitted over the server although it can be. A client side exit will still be noticed on the server side with read()
 
-Should a given input not fully occupy its respective field, the remainder of the bytes are initialized to null terminators.
+### Register command:
 
-The server takes this array of unsigned characters and deserializes it back into the struct that holds user input. This struct is defined in "parser.h" and is the same struct that user input is initially parsed into on the client program.
+When a user invokes the register command, the user provides a username and password. The username stays in the plaintext form that it was submitted. The password is hashed with sha256. In addition to this, the client creates a public/private key pair for the current register request. The server stores a client public key and the encrypted form of both the public and private key. As such, these must be transmitted to the server.
 
-SERVER TO CLIENT
+The register command requires only one packet be sent from client to server, which is as follows:
 
-The server can send the client data of variable size, depending on the nature of the contents. The server can send the client either information obtained from the database (public and private messages) or error messages that can only be identified server side because they require database access. The makeup of these packets are as follows:
-- A variable amount of bytes containing the data sent from server to client.
-  The size of this data is in the header.
-
-PROTOCOL:
-
-From client to server communication:
-
-Register packet:
+The identification for a register command packet from client to server is C_MSG_REGISTER.
 
 - 20 bytes for username
 - 32 bytes for hashed password (sha256)
@@ -72,3 +87,53 @@ Register packet:
 - 16 bytes for initialization vector
 - 4 bytes for size of encrypted keys
 - variable size for encrypted keys
+
+This message is compiled in client_network.c with the function gen_c_register_packet() and its helper functions.
+
+### Login command:
+
+### Private message command:
+
+### Public message command:
+
+### Users command:
+
+## From server to client communication
+
+The server only ever writes to the client in response to client input. As such, the data is reactionary, and based on whether a given client command executed successfully or not, a packet containing either an error message or data is sent. The identification of packets is defined in network.h
+
+### Exit command:
+
+Nothing is written to the client.
+
+### Register command:
+
+A register command can either succeed of fail depending on whether the given username is reserved or the user is logged on (although this is also checked client side, so these errors should not occur).
+
+###### On register success:
+
+The identification for a packet on a successful registration is S_META_REGISTER_PASS
+
+When a user successfully registers, the server logs that client in. This means that the return packet for login and register are the same. As such, the packet returned contains the RSA key pair that is stored in the database for that user.
+
+The packet is as follows:
+
+- 16 bytes for the initialization vector utilized when encrypting the key pair
+- 4 bytes for the size of the key pair
+- variable size for the encrypted key pair
+
+###### On register failure:
+
+On failure, the identification is S_META_REGISTER_FAIL.
+
+The packet returned contains an error message on why the register failed:
+
+- variable size for the error message
+
+### Login command:
+
+### Private message command:
+
+### Public message command:
+
+### Users command:

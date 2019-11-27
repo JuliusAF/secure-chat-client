@@ -111,7 +111,7 @@ unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypai
 
 /* this function actually generates a packet in the form of packet_t. this will
 be passed to a write function for transmission over the socket */
-packet_t *gen_register_packet(command_t *n, request_t *r) {
+packet_t *gen_c_register_packet(command_t *n, request_t *r) {
   int payload_sz;
   packet_hdr_t *header;
   unsigned char *payload;
@@ -142,5 +142,6 @@ packet_t *gen_register_packet(command_t *n, request_t *r) {
   }
   header->pckt_sz = payload_sz;
 
+  free_keypair(keys);
   return pack_packet(header, payload);
 }

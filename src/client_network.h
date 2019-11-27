@@ -10,6 +10,6 @@
 to send it over to the server */
 unsigned char *serialize_keypair(keypair_t *k, int size);
 unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypair_t *k, int *size);
-packet_t *gen_register_packet(command_t *n, request_t *r);
+packet_t *gen_c_register_packet(command_t *n, request_t *r);
 
 #endif

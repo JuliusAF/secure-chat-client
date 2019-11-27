@@ -1,6 +1,7 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include "network.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -43,6 +44,38 @@ typedef struct parsed_input {
   };
 } command_t;
 
+typedef struct parsed_client_input {
+  uint16_t id;
+
+  union {
+    struct {
+      char *username;
+      unsigned char *hash_password;
+      unsigned int publen;
+      char *pubkey;
+      unsigned char *iv;
+      unsigned int encrypt_sz;
+      unsigned char *encrypted_keys;
+    } reg_packet;
+
+  };
+} client_parsed_t;
+
+typedef struct parsed_server_input {
+  uint16_t id;
+
+  union {
+    struct {
+      unsigned char *iv;
+      unsigned int encrypt_sz;
+      unsigned char *encrypted_keys;
+    } user_details;
+  };
+} server_parsed_t;
+
+typedef struct packet_to_send packet_t;
+
+/* functions for parsing user input on the client side */
 char *read_input(int fd);
 char *trim_front_whitespace(char *input);
 int trim_back_whitespace(char *input);
@@ -58,6 +91,18 @@ command_t *parse_input(char *input);
 bool is_node_legal(command_t *node);
 void free_node(command_t *node);
 
+/* functions for parsing packets received server side from the client */
+client_parsed_t *parse_client_input(packet_t *p);
+int parse_client_register(packet_t *packet, client_parsed_t *parsed);
+bool is_client_parsed_legal(client_parsed_t *p);
+void free_client_parsed(client_parsed_t *p);
+
+/* functions for parsing packets sent from server to client*/
+
+server_parsed_t parse_server_input(packet_t *p);
+bool is_server_parsed_legal(server_parsed_t *p);
+int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed);
+void free_server_parsed(server_parsed_t *p);
 
 
 #endif

@@ -36,7 +36,8 @@ unsigned char *hash_password(char *input, int size, unsigned char *salt, int sal
   unsigned char *md, *tmp;
   int length;
 
-  if (input == NULL) return NULL;
+  if (input == NULL || size < 0)
+    return NULL;
   md = (unsigned char *) safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH);
   if (md == NULL)
     return NULL;
@@ -177,9 +178,6 @@ keypair_t *create_rsa_pair() {
   keys->pubkey[keylen] = '\0';
   keys->publen = keylen;
   BIO_flush(biopub);
-
-  printf("privkey: %s\n", keys->privkey);
-  printf("pubkey: %s\n", keys->pubkey);
 
   cleanup:
 

@@ -94,7 +94,7 @@ int accept_connection(int serverfd) {
   return connfd;
 }
 
-static bool is_packet_legal(packet_t *p) {
+bool is_packet_legal(packet_t *p) {
   return (p != NULL && p->header != NULL && p->payload != NULL);
 }
 
@@ -109,11 +109,14 @@ int send_packet_over_socket(SSL *ssl, int fd, packet_t *p) {
   }
 
   size = (int) (p->header->pckt_sz+HEADER_SIZE);
-
+  printf("data size from header = %d\n", p->header->pckt_sz);
+  printf("packet size = %d\n", size);
   serialized = serialize_packet(p);
   if (serialized == NULL)
     return -1;
-
+  printf("printinf serialized\n");
+  write(1, serialized, size);
+  printf("\n");
   /* write to socket until the entire packet has been sent */
   while (size > 0) {
     bytes_written = ssl_block_write(ssl, fd, serialized+total, size);
@@ -133,28 +136,51 @@ int send_packet_over_socket(SSL *ssl, int fd, packet_t *p) {
 in read*/
 int read_packet_from_socket(SSL *ssl, int fd, unsigned char *buffer) {
   int bytes_read, total = 0;
+  unsigned int packet_sz;
   uint32_t data_size;
 
+  printf("reached read function\n");
   /* continues to read from socket until the complete header is read*/
   while (total < (int) HEADER_SIZE) {
     bytes_read = ssl_block_read(ssl, fd, buffer+total, HEADER_SIZE-total);
-    if (bytes_read < 1)
+    if (bytes_read < 0){
+      fprintf(stderr, "failed to read header bytes\n");
+      perror("header read");
       return bytes_read;
+    }
+    else if (bytes_read == 0) {
+      fprintf(stderr, "read closed\n");
+      return 0;
+    }
 
     total += bytes_read;
   }
+  printf("bytes read from header = %d\n", total);
   /* find size of data payload*/
   memcpy(&data_size, buffer, sizeof(uint32_t));
   if (data_size > MAX_PAYLOAD_SIZE)
     return -1;
+  printf("bytes of data - %d\n", data_size);
+  packet_sz = HEADER_SIZE+data_size;
 
   /* continues to read from socket until the complete payload is read*/
   while (total < (int) (HEADER_SIZE+data_size)) {
-    bytes_read = ssl_block_read(ssl, fd, buffer+total, HEADER_SIZE-total);
-    if (bytes_read < 1)
+    bytes_read = ssl_block_read(ssl, fd, buffer+total, packet_sz-total);
+    if (bytes_read < 0){
+      fprintf(stderr, "failed to read data bytes\n");
+      perror("data read");
       return bytes_read;
+    }
+    else if (bytes_read == 0) {
+      fprintf(stderr, "read closed\n");
+      return 0;
+    }
 
     total += bytes_read;
+  }
+  if (total != (int) packet_sz) {
+    fprintf(stderr, "Failed to read proper amount of bytes\n");
+    return -1;
   }
   return total;
 }
@@ -219,20 +245,30 @@ packet_t *unpack_packet(unsigned char *buffer, int size) {
   packet_hdr_t *header;
   unsigned char *payload;
 
-  if (buffer == NULL || size == 0
+  if (buffer == NULL || size < 1
     || size > MAX_PACKET_SIZE)
     return NULL;
 
   packet = (packet_t *) safe_malloc(sizeof(packet_t));
+  if (packet == NULL)
+    return NULL;
   header = (packet_hdr_t *) safe_malloc(sizeof(packet_hdr_t));
-  payload = (unsigned char *) safe_malloc(sizeof(unsigned char) * MAX_PAYLOAD_SIZE);
+  if (header == NULL) {
+    free(packet);
+    return NULL;
+  }
 
   memcpy(&header->pckt_sz, buffer, sizeof(uint32_t));
-  if (size < (int) (header->pckt_sz+HEADER_SIZE)) {
+  if (size != (int) (header->pckt_sz+HEADER_SIZE)) {
+    fprintf(stderr, "netowrk.c:264 unpack packet failed size check\n");
     free(packet);
     free(header);
-    free(payload);
-
+    return NULL;
+  }
+  payload = (unsigned char *) safe_malloc(sizeof(unsigned char) * header->pckt_sz);
+  if (payload == NULL) {
+    free(packet);
+    free(header);
     return NULL;
   }
 

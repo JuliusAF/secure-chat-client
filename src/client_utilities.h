@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <openssl/ssl.h>
 #include "cryptography.h"
+#include "network.h"
 #include "parser.h"
 
 #define DATE_FORMAT "%Y-%m-%d %H:%M:%S"
@@ -35,8 +36,6 @@ int create_formatted_msg(char *msg, command_t *n, user_t *u);
 void handle_user_input(command_t *n, user_t *u, request_t *r);
 
 void handle_user_register(command_t *node, user_t *uuser, request_t *request);
-
-void print_parse_error(command_t *n);
 void print_error(char *s);
 
 

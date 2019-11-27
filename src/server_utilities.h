@@ -11,8 +11,8 @@
 /* The server and workers communicate over the pipes.
 The communication between them, however, is very simple and
 there is no need for elaborate messages. The workers tell the server
-if their connection ended with "Closed" and the worker tell the server,
-and vice versa, if the databse has updated.*/
+if their connection ended with "C" and the worker tells the server,
+and vice versa, if the database has updated.*/
 #define S_MSG_UPDATE "U"
 #define S_MSG_CLOSE "C"
 #define S_MSG_LEN 1
@@ -26,6 +26,8 @@ typedef struct client_info {
 } client_t;
 
 void worker(int connfd, int from_parent[2], int to_parent[2]);
-int handle_client_input(command_t *node, client_t *client_info, int pipefd);
+void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd);
+void handle_client_register(client_parsed_t *p, client_t *client_info);
+
 
 #endif

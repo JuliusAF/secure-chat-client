@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include "parser.h"
+#include "network.h"
 #include "safe_wrappers.h"
 
 static const char delim[] = " \n\t\v";
@@ -315,4 +316,286 @@ void free_node(command_t *node) {
   }
 
   free(node);
+}
+
+/* These functions detail the parsing of a packet that was sent from the client
+to the server */
+
+/* function takes as input a packet and parses it into the client_parsed_t struct */
+client_parsed_t *parse_client_input(packet_t *p) {
+  int ret;
+  client_parsed_t *parsed;
+
+  if (!is_packet_legal(p)) {
+    return NULL;
+  }
+
+  parsed = (client_parsed_t *) safe_malloc(sizeof(client_parsed_t));
+
+  if (parsed == NULL)
+    return NULL;
+
+  parsed->id = p->header->pckt_id;
+
+  switch (parsed->id) {
+    case C_MSG_EXIT:
+      break;
+    case C_MSG_LOGIN:
+      break;
+    case C_MSG_REGISTER:
+      ret = parse_client_register(p, parsed);
+      break;
+    case C_MSG_PRIVMSG:
+      break;
+    case C_MSG_PUBMSG:
+      break;
+    case C_MSG_USERS:
+      break;
+    case C_META_PUBKEY_RQST:
+      break;
+    default:
+      ret = -1;
+      break;
+  }
+
+  if (ret < 0) {
+    free_client_parsed(parsed);
+    return NULL;
+  }
+  return parsed;
+}
+
+/* helper function to parse_client_register that initializes all pointers to NULL */
+static void initialize_client_reg_node(client_parsed_t *p) {
+  if (p == NULL || p->id != C_MSG_REGISTER)
+    return;
+
+  p->reg_packet.username = NULL;
+  p->reg_packet.hash_password = NULL;
+  p->reg_packet.pubkey = NULL;
+  p->reg_packet.iv = NULL;
+  p->reg_packet.encrypted_keys = NULL;
+}
+
+/* parses a register request packet into the client_parsed_t struct. It deserializes
+the packet whole checking for memory overflow errors etc.
+Returns:
+-1 on failure
+1 on success */
+int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
+  unsigned char *payload, *tmp, *tmpend;
+  unsigned int total, known_sz;
+
+  if (!is_packet_legal(packet) || parsed == NULL ||
+      parsed->id != C_MSG_REGISTER)
+    return -1;
+
+  /* checks that the packet payload size is at least as large as the known size
+  reuirements. (there are some fixed sizes to the packet, and some of variable size )*/
+  known_sz = USERNAME_MAX + SHA256_DIGEST_LENGTH + IV_SIZE + (sizeof(unsigned int) * 2);
+  if (known_sz > packet->header->pckt_sz) {
+    fprintf(stderr, "register packet fails to meet minumum size requirement\n");
+    return -1;
+  }
+  /* sets the nodes of the parsed struct to null for type register coommand */
+  initialize_client_reg_node(parsed);
+  total = packet->header->pckt_sz + HEADER_SIZE;
+  payload = packet->payload;
+  tmp = payload;
+  tmpend = tmp + total;
+
+  /* allocates memory for the variables that have a constant size */
+  parsed->reg_packet.username = (char *) safe_malloc(sizeof(char) * USERNAME_MAX+1);
+  if (parsed->reg_packet.username == NULL)
+    return -1;
+  parsed->reg_packet.hash_password = (unsigned char *) safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH+1);
+  if (parsed->reg_packet.hash_password == NULL)
+    return -1;
+  parsed->reg_packet.iv = (unsigned char *) safe_malloc(sizeof(char) * IV_SIZE+1);
+  if (parsed->reg_packet.iv == NULL)
+    return -1;
+
+  /* traverses there payload with temporary pointer tmp. It copies th memory from payload into
+  the respective variables in the parsed struct */
+  memcpy(parsed->reg_packet.username, tmp, USERNAME_MAX);
+  tmp += USERNAME_MAX;
+  parsed->reg_packet.username[USERNAME_MAX] = '\0';
+  memcpy(parsed->reg_packet.hash_password, tmp, SHA256_DIGEST_LENGTH);
+  tmp += SHA256_DIGEST_LENGTH;
+  parsed->reg_packet.hash_password[SHA256_DIGEST_LENGTH] = '\0';
+  memcpy(&parsed->reg_packet.publen, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  /* check that the payload has enough space for at least up to the next instance of
+  a variable size input */
+  if (tmp + parsed->reg_packet.publen + IV_SIZE + sizeof(unsigned int) > tmpend) {
+    fprintf(stderr, "failed to copy register data 1, would overflow pointer\n");
+    return -1;
+  }
+
+  parsed->reg_packet.pubkey = (char *) safe_malloc(sizeof(unsigned char) * parsed->reg_packet.publen+1);
+  if (parsed->reg_packet.pubkey == NULL)
+    return -1;
+
+  memcpy(parsed->reg_packet.pubkey, tmp, parsed->reg_packet.publen);
+  tmp += parsed->reg_packet.publen;
+  parsed->reg_packet.pubkey[parsed->reg_packet.publen] = '\0';
+  memcpy(parsed->reg_packet.iv, tmp, IV_SIZE);
+  tmp += IV_SIZE;
+  parsed->reg_packet.iv[IV_SIZE] = '\0';
+  memcpy(&parsed->reg_packet.encrypt_sz, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  /* ensure that the variable size does not cause overflow */
+  if (tmp + parsed->reg_packet.encrypt_sz > tmpend) {
+    fprintf(stderr, "failed to copy register data 2, would overflow pointer\n");
+    return -1;
+  }
+
+  parsed->reg_packet.encrypted_keys =
+    (unsigned char *) safe_malloc(sizeof(unsigned char) * parsed->reg_packet.encrypt_sz+1);
+  if (parsed->reg_packet.encrypted_keys == NULL)
+    return -1;
+
+  memcpy(parsed->reg_packet.encrypted_keys, tmp, parsed->reg_packet.encrypt_sz);
+  parsed->reg_packet.encrypted_keys[parsed->reg_packet.encrypt_sz] = '\0';
+
+  return 1;
+}
+
+
+
+
+/* checks whether a given client_parsed_t struct has all of its variables
+properly allocated*/
+bool is_client_parsed_legal(client_parsed_t *p) {
+  if (p == NULL)
+    return false;
+
+  switch (p->id) {
+    case C_MSG_EXIT:
+      break;
+    case C_MSG_LOGIN:
+      break;
+    case C_MSG_REGISTER:
+      if (p->reg_packet.username == NULL ||
+          p->reg_packet.hash_password == NULL ||
+          p->reg_packet.pubkey == NULL ||
+          p->reg_packet.iv == NULL ||
+          p->reg_packet.encrypted_keys == NULL)
+        return false;
+      break;
+    case C_MSG_PRIVMSG:
+      break;
+    case C_MSG_PUBMSG:
+      break;
+    case C_MSG_USERS:
+      break;
+    case C_META_PUBKEY_RQST:
+      break;
+    default:
+      break;
+  }
+  return true;
+}
+
+/* frees a given client_parsed_t struct */
+void free_client_parsed(client_parsed_t *p) {
+  if (p == NULL)
+    return;
+
+  switch (p->id) {
+    case C_MSG_EXIT:
+      break;
+    case C_MSG_LOGIN:
+      break;
+    case C_MSG_REGISTER:
+      free(p->reg_packet.username);
+      free(p->reg_packet.hash_password);
+      free(p->reg_packet.pubkey);
+      free(p->reg_packet.iv);
+      free(p->reg_packet.encrypted_keys);
+      break;
+    case C_MSG_PRIVMSG:
+      break;
+    case C_MSG_PUBMSG:
+      break;
+    case C_MSG_USERS:
+      break;
+    case C_META_PUBKEY_RQST:
+      break;
+    default:
+      break;
+  }
+
+  free(p);
+}
+
+/* these functions detail the parsing of a packet that was sent from server
+to the client */
+
+
+
+/* parses a packet from server into the server_parsed_t struct and returns it */
+server_parsed_t parse_server_input(packet_t *p) {
+  int ret;
+  server_parsed_t *parsed;
+
+  if (p == NULL)
+    return NULL;
+
+  parsed = (server_parsed_t *) safe_malloc(sizeof(server_parsed_t));
+  if (parsed == NULL)
+    return;
+
+  parsed->id = p->header->pckt_id;
+
+  switch (p->id) {
+    case S_MSG_PUBMSG:
+      break;
+    case S_MSG_PRIVMSG:
+      break;
+    case S_MSG_USERS:
+      break;
+    case S_MSG_GENERIC_ERR:
+      break;
+    case S_META_LOGIN_PASS:
+      break;
+    case S_META_LOGIN_FAIL:
+      break;
+    case S_META_REGISTER_PASS:
+      break;
+    case S_META_REGISTER_FAIL:
+      break;
+    default:
+      break;
+  }
+
+  return parsed;
+}
+
+/* parses a packet that contains user data into the respective struct. Both
+login success and register success can return a packet that contains user info
+which is parsed into the same struct data fields here.
+Returns:
+-1 on failure
+1 on success*/
+
+int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed) {
+  int ret = -1;
+
+  if (!is_packet_legal(packet) || parsed == NULL ||
+      parsed->id != S_META_LOGIN_PASS ||
+      parsed->id != S_META_REGISTER_PASS)
+    return -1;
+
+
+  return ret;
+}
+
+/* checks if a given server_parsed_t struct has all pointers not NULL*/
+bool is_server_parsed_legal(server_parsed_t *p);
+
+/* frees a given server_parsed_t struct */
+void free_server_parsed(server_parsed_t *p) {
+  if (p == NULL)
+    return;
 }
