@@ -190,6 +190,7 @@ packet_t *gen_c_register_packet(command_t *n, request_t *r) {
     return NULL;
 
   header->pckt_id = C_MSG_REGISTER;
+  header->siglen = 0;
   memset(header->sig, '\0', MAX_SIG_SZ);
 
   keys = create_rsa_pair();
@@ -255,6 +256,7 @@ packet_t *gen_c_login_packet(command_t *n) {
 
   header->pckt_id = C_MSG_LOGIN;
   header->pckt_sz = LOGIN_REQUEST_SIZE;
+  header->siglen = 0;
   memset(header->sig, '\0', MAX_SIG_SZ);
 
   payload = serialize_login(n);

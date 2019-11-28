@@ -21,6 +21,7 @@ packet_t *gen_s_error_packet(uint16_t id, char *err_msg) {
 
   header->pckt_id = (uint32_t) id;
   header->pckt_sz = payload_sz;
+  header->siglen = 0;
   memset(header->sig, '\0', MAX_SIG_SZ);
   memcpy(payload, err_msg, header->pckt_sz);
 
@@ -48,6 +49,7 @@ packet_t *gen_s_userinfo_packet(fetched_userinfo_t *f, uint16_t id) {
   }
   header->pckt_id = id;
   header->pckt_sz = payload_sz;
+  header->siglen = 0;
   memset(header->sig, '\0', MAX_SIG_SZ);
 
   tmp = payload;

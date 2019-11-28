@@ -230,6 +230,8 @@ unsigned char *serialize_packet(packet_t *p) {
   index += (int) sizeof(uint32_t);
   memcpy(serialized+index, &hdr->pckt_id, sizeof(uint16_t));
   index += (int) sizeof(uint16_t);
+  memcpy(serialized+index, &hdr->siglen, sizeof(uint32_t));
+  index += (int) sizeof(uint32_t);
   memcpy(serialized+index, hdr->sig, MAX_SIG_SZ);
   index += MAX_SIG_SZ;
   memcpy(serialized+index, data, hdr->pckt_sz);
@@ -266,6 +268,7 @@ packet_t *unpack_packet(unsigned char *buffer, int size) {
     free(header);
     return NULL;
   }
+
   payload = (unsigned char *) safe_malloc(sizeof(unsigned char) * header->pckt_sz);
   if (payload == NULL) {
     free(packet);
@@ -276,6 +279,8 @@ packet_t *unpack_packet(unsigned char *buffer, int size) {
   index += sizeof(uint32_t);
   memcpy(&header->pckt_id, buffer+index, sizeof(uint16_t));
   index += sizeof(uint16_t);
+  memcpy(&header->siglen, buffer+index, sizeof(uint32_t));
+  index += sizeof(uint32_t);
   memcpy(header->sig, buffer+index, MAX_SIG_SZ);
   index += MAX_SIG_SZ;
   memcpy(payload, buffer+index, header->pckt_sz);

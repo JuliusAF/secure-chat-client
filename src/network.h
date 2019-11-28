@@ -8,7 +8,7 @@
 
 
 /* defines fixed size of header*/
-#define HEADER_SIZE (sizeof(uint32_t) + sizeof(uint16_t) + MAX_SIG_SZ)
+#define HEADER_SIZE (sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint32_t) + MAX_SIG_SZ)
 /* The limit here is reasonably higher than what is needed, but
 is defined to ensure a benchmark for packet size */
 #define MAX_PACKET_SIZE 4096
@@ -40,6 +40,7 @@ is defined to ensure a benchmark for packet size */
 typedef struct packet_header {
   uint32_t pckt_sz;
   uint16_t pckt_id;
+  uint32_t siglen;
   unsigned char sig[MAX_SIG_SZ];
 } packet_hdr_t;
 

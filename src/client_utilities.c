@@ -225,19 +225,19 @@ void handle_user_login(command_t *node, user_t *user, request_t *request) {
 
 	/* inputs data calculated when the command is invoked, like the masterkey and
 	the username the user entered */
- strncpy(request->username, node->acc_details.username, strlen(node->acc_details.username));
- masterkey = gen_master_key(node->acc_details.username, node->acc_details.password);
- if (masterkey == NULL)
+	strncpy(request->username, node->acc_details.username, strlen(node->acc_details.username));
+	masterkey = gen_master_key(node->acc_details.username, node->acc_details.password);
+	if (masterkey == NULL)
 	 return;
 
- memcpy(request->masterkey, masterkey, MASTER_KEY_LEN+1);
- free(masterkey);
+	memcpy(request->masterkey, masterkey, MASTER_KEY_LEN+1);
+	free(masterkey);
 
- packet = gen_c_login_packet(node);
- if (packet == NULL)
-	 return;
+	packet = gen_c_login_packet(node);
+	if (packet == NULL)
+	return;
 
- 	/* if there were no errors, the register request was successfully sent to
+	/* if there were no errors, the register request was successfully sent to
 	the server */
 	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
 	if (ret < 1)	{
@@ -245,7 +245,7 @@ void handle_user_login(command_t *node, user_t *user, request_t *request) {
 	}
 	else
 		request->is_request_active = true;
-}
+	}
 
 /* prints a custom error message*/
 void print_error(char *s) {
