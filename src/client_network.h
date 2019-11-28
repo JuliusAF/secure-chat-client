@@ -13,4 +13,9 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size);
 unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypair_t *k, int *size);
 packet_t *gen_c_register_packet(command_t *n, request_t *r);
 
+/* functions to handle the network aspect of creating a login request
+packet to send to the server */
+unsigned char *serialize_login(command_t *n);
+packet_t *gen_c_login_packet(command_t *n);
+
 #endif

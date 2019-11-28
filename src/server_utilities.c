@@ -83,8 +83,8 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 				break;
 			}
       printf("number of bytes read = %d\n", bytes_read);
-      write(1, input, bytes_read);
-      printf("\n");
+      //write(1, input, bytes_read);
+      //printf("\n");
 
       packet = unpack_packet(input, bytes_read);
       if (packet == NULL)
@@ -134,9 +134,11 @@ void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd) 
     case C_MSG_EXIT:
       break;
     case C_MSG_LOGIN:
+      handle_client_login(p, client_info, S_META_LOGIN_FAIL);
       break;
     case C_MSG_REGISTER:
-      handle_client_register(p, client_info);
+      handle_client_login(p, client_info, S_META_REGISTER_FAIL);
+      //handle_client_register(p, client_info);
       break;
     case C_MSG_PRIVMSG:
       break;
@@ -151,6 +153,7 @@ void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd) 
   }
 }
 
+/*
 void handle_client_register(client_parsed_t *p, client_t *client_info) {
   int ret;
   char err[300] = "";
@@ -178,6 +181,53 @@ void handle_client_register(client_parsed_t *p, client_t *client_info) {
     goto cleanup;
   }
   packet = gen_s_userinfo_packet(fetched, S_META_REGISTER_PASS);
+  ret = send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
+  if (ret < 1)
+    fprintf(stderr, "failed to send user register info packet\n");
+
+  cleanup:
+
+  free_fetched_userinfo(fetched);
+} */
+
+void handle_client_login(client_parsed_t *p, client_t *client_info, uint16_t id) {
+  int ret;
+  uint16_t succ_id = 0;
+  char err[300] = "";
+  packet_t *packet = NULL;
+  fetched_userinfo_t *fetched = NULL;
+
+  if (!is_client_parsed_legal(p) || client_info == NULL)
+    return;
+
+  if (id == S_META_REGISTER_FAIL) {
+    ret = handle_db_register(p, client_info, err);
+    succ_id = S_META_REGISTER_PASS;
+  }
+  else if (id == S_META_LOGIN_FAIL) {
+    ret = handle_db_login(p, client_info, err);
+    succ_id = S_META_LOGIN_PASS;
+  }
+  else
+    return;
+
+  printf("handle register return value: %d\n", ret);
+  if (ret < 0) {
+    packet = gen_s_error_packet(id, err);
+    ret = send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
+    if (ret < 1)
+  		fprintf(stderr, "failed to send user register error packet\n");
+    return;
+  }
+  else if (ret == 0)
+    return;
+  //create register packet
+  fetched = fetch_db_user_info(client_info);
+  if (!is_fetched_userinfo_legal(fetched)) {
+    fprintf(stderr, "failed to fetch register user data\n");
+    goto cleanup;
+  }
+  packet = gen_s_userinfo_packet(fetched, succ_id);
   ret = send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
   if (ret < 1)
     fprintf(stderr, "failed to send user register info packet\n");

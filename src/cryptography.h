@@ -31,8 +31,9 @@ typedef struct rsa_keypairs {
   char *pubkey;
 } keypair_t;
 
-unsigned char *create_rand_salt(int size);
-unsigned char *hash_password(char *input, int size, unsigned char *salt, int salt_size);
+unsigned char *create_rand_salt(unsigned int size);
+//unsigned char *hash_password(char *input, int size, unsigned char *salt, int salt_size);
+unsigned char *hash_password(char *input, unsigned int size, unsigned char *salt, unsigned int salt_size);
 unsigned char *gen_master_key(char *username, char *password);
 
 keypair_t *create_rsa_pair(void);

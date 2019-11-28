@@ -24,7 +24,7 @@ int initialize_database(void);
 msg_components *initialize_msg_components(void);
 signed long long get_latest_msg_rowid(void);
 
-int handle_db_login(command_t *node, client_t *client_info);
+int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_msg);
 int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *error_msg);
 int handle_db_privmsg(command_t *node, client_t *client_info);
 int handle_db_pubmsg(command_t *node, client_t *client_info);

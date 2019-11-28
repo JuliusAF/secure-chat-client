@@ -14,51 +14,56 @@
 #include "parser.h"
 
 /* creates and returns a salt based on the size given*/
-unsigned char *create_rand_salt(int size) {
+unsigned char *create_rand_salt(unsigned int size) {
   unsigned char *salt;
 
   salt = (unsigned char *) safe_malloc(sizeof(unsigned char) * size);
   if (salt == NULL)
     return NULL;
 
-  if (RAND_priv_bytes(salt, size) < 1) {
+  if (RAND_bytes(salt, size) < 1) {
     ERR_print_errors_fp(stderr);
-    fprintf(stderr, "Failed to create salt\n");
     return NULL;
   }
+
+  printf("\n");
   return salt;
 }
 
 /* returns a hash of the password. If the hash should contain a salt,
 the input and salt are concatenated. Otherwise no salt is added */
-unsigned char *hash_password(char *input, int size, unsigned char *salt, int salt_size) {
+unsigned char *hash_password(char *input, unsigned int size, unsigned char *salt, unsigned int salt_size) {
   SHA256_CTX context;
   unsigned char *md, *tmp;
-  int length;
 
-  if (input == NULL || size < 0)
+  if (input == NULL)
     return NULL;
   md = (unsigned char *) safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH);
   if (md == NULL)
     return NULL;
-  length = size;
+  tmp = (unsigned char *) input;
 
-  if (salt != NULL) {
-    tmp = (unsigned char *) safe_malloc(sizeof(unsigned char) * size+salt_size);
-    memcpy(tmp, input, size);
-    memcpy(tmp+size, salt, salt_size);
-    length = size+salt_size;
-  }
-  else {
-    tmp = (unsigned char *) safe_malloc(sizeof(unsigned char) * size);
-    memcpy(tmp, input, size);
+
+  if (SHA256_Init(&context) < 1) {
+    fprintf(stderr, "sha init failed\n");
+    ERR_print_errors_fp(stderr);
   }
 
-  if (SHA256_Init(&context) < 1) ERR_print_errors_fp(stderr);
-  if (SHA256_Update(&context, tmp, length) < 1) ERR_print_errors_fp(stderr);
-  if (SHA256_Final(md, &context) < 1) ERR_print_errors_fp(stderr);
+  if (salt != NULL && salt_size != 0) {
+    if (SHA256_Update(&context, salt, salt_size) < 1) {
+      fprintf(stderr, "sha update failed\n");
+      ERR_print_errors_fp(stderr);
+    }
+  }
+  if (SHA256_Update(&context, tmp, size) < 1) {
+    fprintf(stderr, "sha update failed\n");
+    ERR_print_errors_fp(stderr);
+  }
+  if (SHA256_Final(md, &context) < 1) {
+    fprintf(stderr, "sha final failed\n");
+    ERR_print_errors_fp(stderr);
+  }
 
-  free(tmp);
   return md;
 }
 
@@ -101,7 +106,10 @@ unsigned char *gen_master_key(char *username, char *password) {
 }
 
 /* creates an rsa key pair and stores it in the key pair struct. These keys
-are created and will be linked to the user who commenced the register request */
+are created and will be linked to the user who commenced the register request
+
+the function utilizes an error boolean and the goto jump to check whether an
+error has occured, and returns NULL if yes and the rsa key pair struct if not */
 keypair_t *create_rsa_pair() {
   int ret, keylen = 0;
   bool error = false;
@@ -116,9 +124,12 @@ keypair_t *create_rsa_pair() {
     error = true;
     goto cleanup;
   }
+  /* initializes the variables so that on failure the struct can still be passed
+  to free_keypair() */
   keys->privkey = NULL;
   keys->pubkey = NULL;
 
+  /* sets the BIGNUM * and creates an RSA key pair */
   bignum = BN_new();
   ret = BN_set_word(bignum, exponent);
   if (ret != 1) {
@@ -134,6 +145,8 @@ keypair_t *create_rsa_pair() {
     goto cleanup;
   }
 
+  /* reads the private key stored in the RSA struct by opening a memroy BIO and
+  places it into a character array in PEM format */
   biopriv = BIO_new(BIO_s_mem());
   if (biopriv == NULL) {
     error = true;
@@ -152,11 +165,15 @@ keypair_t *create_rsa_pair() {
     error = true;
     goto cleanup;
   }
+  /* reads the private key into the character array and null terminates it
+  for security */
   BIO_read(biopriv, keys->privkey, keylen);
   keys->privkey[keylen] = '\0';
   keys->privlen = keylen;
   BIO_flush(biopriv);
 
+  /* reads the public key stored in the RSA struct by opening a memroy BIO and
+  places it into a character array in PEM format */
   biopub = BIO_new(BIO_s_mem());
   if (biopub == NULL) {
     error = true;
@@ -174,6 +191,8 @@ keypair_t *create_rsa_pair() {
     error = true;
     goto cleanup;
   }
+  /* reads the public key into the character array and null terminates it
+  for security */
   BIO_read(biopub, keys->pubkey, keylen);
   keys->pubkey[keylen] = '\0';
   keys->publen = keylen;
@@ -193,8 +212,8 @@ keypair_t *create_rsa_pair() {
   return error ? NULL : keys;
 }
 
-/* helper function to create_rsa_pair that checks whether a given keypair_t
-struct is legal (all variables are allocated) */
+/* helper function to for key pairs that checks whether a given keypair_t
+struct is legal (no pointers are NULL) */
 bool is_keypair_legal(keypair_t *k) {
   return (k != NULL && k->privkey != NULL && k->pubkey != NULL);
 }
@@ -209,8 +228,14 @@ void free_keypair(keypair_t *k) {
   free(k);
 }
 
-/* applies AES-128-cbc encryption to the given buffer, based on the given
-initialization vector. returns -1 on failure or size of encrypted data on success */
+/* applies AES-128-cbc encryption to the given output buffer, based on the given
+initialization vector and key. The key and IV are 16 bytes. The function
+also takes an 'int enc' argument like the actual openSSL interface. This specifies
+whether the function is to encrypt and decrypt, and the macro for either is defined
+in cryptography.h
+Returns:
+size of encrypted/decrypted output on success
+-1 on failure */
 int apply_aes(unsigned char *output, unsigned char *input, int size, unsigned char *key, unsigned char *iv, int enc) {
   const EVP_CIPHER *type = EVP_aes_128_cbc();
   int tmp, outlen, ret = 0;

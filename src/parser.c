@@ -10,6 +10,14 @@
 
 static const char delim[] = " \n\t\v";
 
+void print_hex(unsigned char *hex, int len) {
+  printf("hexadecimals: ");
+  for (int i = 0; i < len; i++) {
+    printf("%x", hex[i]);
+  }
+  printf("END\n");
+}
+
 bool is_digit(const char *s) {
   for (size_t i = 0; i < strlen(s); i++)
     if(!isdigit(s[i]))
@@ -321,6 +329,9 @@ void free_node(command_t *node) {
 /* These functions detail the parsing of a packet that was sent from the client
 to the server */
 
+
+
+
 /* function takes as input a packet and parses it into the client_parsed_t struct */
 client_parsed_t *parse_client_input(packet_t *p) {
   int ret;
@@ -344,13 +355,16 @@ client_parsed_t *parse_client_input(packet_t *p) {
     return NULL;
 
   parsed->id = p->header->pckt_id;
-  /* sets the nodes of the parsed struct to null depending on packet id */
+  /* sets the nodes of the parsed struct to null depending on packet id
+  so that the parsed struct can always be freed without error (other than
+  double freeing)*/
   initialize_client_parsed(parsed);
 
   switch (parsed->id) {
     case C_MSG_EXIT:
       break;
     case C_MSG_LOGIN:
+      ret = parse_client_login(p, parsed);
       break;
     case C_MSG_REGISTER:
       ret = parse_client_register(p, parsed);
@@ -378,8 +392,8 @@ client_parsed_t *parse_client_input(packet_t *p) {
 /* parses a register request packet into the client_parsed_t struct. It deserializes
 the packet whole checking for memory overflow errors etc.
 Returns:
--1 on failure
-1 on success */
+1 on success;
+-1 on failure */
 int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
   unsigned char *payload, *tmp, *tmpend;
   unsigned int total, known_sz;
@@ -405,7 +419,8 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
   parsed->reg_packet.username = (char *) safe_malloc(sizeof(char) * USERNAME_MAX+1);
   if (parsed->reg_packet.username == NULL)
     return -1;
-  parsed->reg_packet.hash_password = (unsigned char *) safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH+1);
+  parsed->reg_packet.hash_password =
+      (unsigned char *) safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH+1);
   if (parsed->reg_packet.hash_password == NULL)
     return -1;
   parsed->reg_packet.iv = (unsigned char *) safe_malloc(sizeof(char) * IV_SIZE+1);
@@ -458,6 +473,39 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
   return 1;
 }
 
+/* parses a login packet from the client.
+Returns:
+1 on success
+-1 on failure */
+int parse_client_login(packet_t *packet, client_parsed_t *parsed) {
+  unsigned char *tmp;
+
+  if (!is_packet_legal(packet) || parsed == NULL ||
+      parsed->id != C_MSG_LOGIN)
+    return -1;
+
+  /* a login request packet is a constant size. If it isn't something is wrong */
+  if (packet->header->pckt_sz != LOGIN_REQUEST_SIZE)
+    return -1;
+
+  parsed->log_packet.username = (char *) safe_malloc(sizeof(char) * USERNAME_MAX+1);
+  parsed->log_packet.hash_password =
+      (unsigned char *) safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH+1);
+  if (parsed->log_packet.username == NULL ||
+      parsed->log_packet.hash_password == NULL)
+    return -1;
+
+  tmp = packet->payload;
+
+  memcpy(parsed->log_packet.username, tmp, USERNAME_MAX);
+  tmp += USERNAME_MAX;
+  parsed->log_packet.username[USERNAME_MAX] = '\0';
+  memcpy(parsed->log_packet.hash_password, tmp, SHA256_DIGEST_LENGTH);
+  parsed->log_packet.hash_password[SHA256_DIGEST_LENGTH] = '\0';
+
+  return 1;
+}
+
 /* sets the pointers of the parsed struct to null for the type of the parsed struct
 passed to it */
 void initialize_client_parsed(client_parsed_t *p) {
@@ -468,6 +516,8 @@ void initialize_client_parsed(client_parsed_t *p) {
     case C_MSG_EXIT:
       break;
     case C_MSG_LOGIN:
+      p->log_packet.username = NULL;
+      p->log_packet.hash_password = NULL;
       break;
     case C_MSG_REGISTER:
       p->reg_packet.username = NULL;
@@ -499,6 +549,9 @@ bool is_client_parsed_legal(client_parsed_t *p) {
     case C_MSG_EXIT:
       break;
     case C_MSG_LOGIN:
+      if (p->log_packet.username == NULL ||
+          p->log_packet.hash_password == NULL)
+        return false;
       break;
     case C_MSG_REGISTER:
       if (p->reg_packet.username == NULL ||
@@ -531,6 +584,8 @@ void free_client_parsed(client_parsed_t *p) {
     case C_MSG_EXIT:
       break;
     case C_MSG_LOGIN:
+      free(p->log_packet.username);
+      free(p->log_packet.hash_password);
       break;
     case C_MSG_REGISTER:
       free(p->reg_packet.username);
@@ -581,6 +636,7 @@ server_parsed_t *parse_server_input(packet_t *p) {
     return NULL;
 
   parsed->id = p->header->pckt_id;
+  /* sets relevant pointers to NULL */
   initialize_server_parsed(parsed);
 
   switch (parsed->id) {
@@ -591,22 +647,25 @@ server_parsed_t *parse_server_input(packet_t *p) {
     case S_MSG_USERS:
       break;
     case S_MSG_GENERIC_ERR:
+      ret = parse_server_error(p, parsed);
       break;
     case S_META_LOGIN_PASS:
       ret = parse_server_userinfo(p, parsed);
       break;
     case S_META_LOGIN_FAIL:
+      ret = parse_server_error(p, parsed);
       break;
     case S_META_REGISTER_PASS:
       ret = parse_server_userinfo(p, parsed);
-      printf("return value of parse user info: %d\n", ret);
       break;
     case S_META_REGISTER_FAIL:
+      ret = parse_server_error(p, parsed);
       break;
     default:
       ret = -1;
       break;
   }
+  /* if an error during parsing occurs, the parse struct is freed */
   if (ret < 0) {
     free_server_parsed(parsed);
     return NULL;
@@ -667,6 +726,40 @@ int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed) {
   return 1;
 }
 
+static bool is_id_error(server_parsed_t *p) {
+  if (p == NULL)
+    return false;
+
+  return (p->id == S_MSG_GENERIC_ERR ||
+          p->id == S_META_LOGIN_FAIL ||
+          p->id == S_META_REGISTER_FAIL);
+}
+
+/* parses a packet with an error code
+Returns:
+1 on success
+-1 on failure  */
+int parse_server_error(packet_t *packet, server_parsed_t *parsed) {
+  unsigned int size;
+
+  if (!is_packet_legal(packet) || parsed == NULL ||
+      !is_id_error(parsed))
+    return -1;
+
+  size = packet->header->pckt_sz;
+  if (size > MAX_PAYLOAD_SIZE)
+    return -1;
+
+  parsed->error_message = (char *) safe_malloc(sizeof(char) * size+1);
+  if (parsed->error_message == NULL)
+    return -1;
+
+  memcpy(parsed->error_message, packet->payload, size);
+  parsed->error_message[size] = '\0';
+
+  return 1;
+}
+
 void initialize_server_parsed(server_parsed_t *p) {
   if (p == NULL)
     return;
@@ -679,18 +772,21 @@ void initialize_server_parsed(server_parsed_t *p) {
     case S_MSG_USERS:
       break;
     case S_MSG_GENERIC_ERR:
+      p->error_message = NULL;
       break;
     case S_META_LOGIN_PASS:
       p->user_details.iv = NULL;
       p->user_details.encrypted_keys = NULL;
       break;
     case S_META_LOGIN_FAIL:
+      p->error_message = NULL;
       break;
     case S_META_REGISTER_PASS:
       p->user_details.iv = NULL;
       p->user_details.encrypted_keys = NULL;
       break;
     case S_META_REGISTER_FAIL:
+      p->error_message = NULL;
       break;
     default:
       break;
@@ -710,6 +806,8 @@ bool is_server_parsed_legal(server_parsed_t *p) {
     case S_MSG_USERS:
       break;
     case S_MSG_GENERIC_ERR:
+      if (p->error_message == NULL)
+        return false;
       break;
     case S_META_LOGIN_PASS:
       if (p->user_details.iv == NULL ||
@@ -717,6 +815,8 @@ bool is_server_parsed_legal(server_parsed_t *p) {
         return false;
       break;
     case S_META_LOGIN_FAIL:
+      if (p->error_message == NULL)
+        return false;
       break;
     case S_META_REGISTER_PASS:
       if (p->user_details.iv == NULL ||
@@ -724,6 +824,8 @@ bool is_server_parsed_legal(server_parsed_t *p) {
         return false;
       break;
     case S_META_REGISTER_FAIL:
+      if (p->error_message == NULL)
+        return false;
       break;
     default:
       return false;
@@ -744,18 +846,21 @@ void free_server_parsed(server_parsed_t *p) {
     case S_MSG_USERS:
       break;
     case S_MSG_GENERIC_ERR:
+      free(p->error_message);
       break;
     case S_META_LOGIN_PASS:
       free(p->user_details.iv);
       free(p->user_details.encrypted_keys);
       break;
     case S_META_LOGIN_FAIL:
+      free(p->error_message);
       break;
     case S_META_REGISTER_PASS:
       free(p->user_details.iv);
       free(p->user_details.encrypted_keys);
       break;
     case S_META_REGISTER_FAIL:
+      free(p->error_message);
       break;
     default:
       break;

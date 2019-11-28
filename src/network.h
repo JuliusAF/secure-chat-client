@@ -6,8 +6,15 @@
 #include "parser.h"
 #include "cryptography.h"
 
+
+/* defines fixed size of header*/
+#define HEADER_SIZE (sizeof(uint32_t) + sizeof(uint16_t) + MAX_SIG_SZ)
+/* The limit here is reasonably higher than what is needed, but
+is defined to ensure a benchmark for packet size */
 #define MAX_PACKET_SIZE 4096
 #define MAX_PAYLOAD_SIZE (MAX_PACKET_SIZE - HEADER_SIZE)
+/* a login request has a fixed size defined here */
+#define LOGIN_REQUEST_SIZE USERNAME_MAX + SHA256_DIGEST_LENGTH
 
 /* define the id codes for packets from clients to server */
 #define C_MSG_EXIT 1001
@@ -29,9 +36,6 @@
 #define S_META_LOGIN_FAIL 2102
 #define S_META_REGISTER_PASS 2103
 #define S_META_REGISTER_FAIL 2104
-
-/* defines fixed size of header*/
-#define HEADER_SIZE (sizeof(uint32_t) + sizeof(uint16_t) + MAX_SIG_SZ)
 
 typedef struct packet_header {
   uint32_t pckt_sz;

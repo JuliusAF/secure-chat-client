@@ -169,103 +169,141 @@ signed long long get_latest_msg_rowid(void) {
 }
 
 /* This function handles a login call to the server. It checks for a variety
-of errors that can occur, such as already being logged in etc.*/
+of errors that can occur, such as already being logged in. It hashes the
+password sent over the socket with the salt in the database and checks if
+they match.
+Returns:
+1 on success
+0 on sqlite3 failure or memory failure
+-1 on failure pertaining to client account (anything that requires an error message
+be sent to the user) */
 
-int handle_db_login(command_t *node, client_t *client_info) {
-  char msg[MESSAGE_MAX+1], *sql, name[USERNAME_MAX+1], password[PASSWORD_MAX+1];
-  int rc, step, status;
-  sqlite3_stmt *res;
-  sqlite3 *db;
+int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_msg) {
+  char *sql, *name = NULL;
+  unsigned char *pass = NULL, *salt = NULL, *hashed_pass = NULL,
+  *db_hashed_pass = NULL;
+  const unsigned char *tmp = NULL;
+  int ret = -1, rc, step, status;
+  sqlite3_stmt *res = NULL;
+  sqlite3 *db = NULL;
+
+  if(!is_client_parsed_legal(parsed))
+    return 0;
 
   db = open_database();
   if (db == NULL)
-    return -1;
+    return 0;
 
+  /* checks if the user is logged in. This is also done client side, so this should
+  never pass unless a different client program is used */
   if (client_info->is_logged) {
-    strcpy(msg, "error: client already logged in");
-    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
-    sqlite3_close(db);
-    return -1;
+    strcpy(err_msg, "you cannot login while logged in");
+    goto cleanup;
   }
+  name = parsed->log_packet.username;
 
-  sql = "SELECT * FROM Users WHERE Username = ?";
+  /* this statement gets the password and salt from the database for
+  verification of login credentials */
+  sql = "SELECT PASSWORD, SALT, STATUS FROM USERS WHERE USERNAME = ?1";
 
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
-  if (rc == SQLITE_OK) {
-    strcpy(name, node->acc_details.username);
+  if (rc == SQLITE_OK)
     sqlite3_bind_text(res, 1, name, -1, SQLITE_STATIC);
-  }
   else {
     fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
-    sqlite3_close(db);
-    return -1;
+    ret = 0;
+    goto cleanup;
+  }
+
+  salt = (unsigned char *) safe_malloc(sizeof(unsigned char) * SALT_SIZE+1);
+  db_hashed_pass = (unsigned char *) safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH+1);
+  if (salt == NULL && db_hashed_pass == NULL){
+    ret = 0;
+    goto cleanup;
   }
 
   step = sqlite3_step(res);
-  if (step != SQLITE_ROW) {
-    strcpy(msg, "error: user ");
-    strcat(msg, node->acc_details.username);
-    strcat(msg, " does not exist");
-    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
-    sqlite3_close(db);
-    return -1;
-  }
-  else if (step == SQLITE_ROW) {
-    strcpy(name, (char *) sqlite3_column_text(res, 0));
-    strcpy(password, (char *) sqlite3_column_text(res, 1));
+  if (step == SQLITE_ROW) {
+    /* checks if user is logged in already */
     status = sqlite3_column_int(res, 2);
+    if (status == 1) {
+      strcpy(err_msg, "user is already logged in");
+      goto cleanup;
+    }
+    /* check if data stored in database is proper size */
+    if (sqlite3_column_bytes(res, 0) != SHA256_DIGEST_LENGTH ||
+        sqlite3_column_bytes(res, 1) != SALT_SIZE) {
+      fprintf(stderr, "incorrect size of salt or hashed password in db\n");
+      ret = 0;
+      goto cleanup;
+    }
+
+    /* copy the data in the database to the variables for login verification */
+    tmp = sqlite3_column_blob(res, 0);
+    memcpy(db_hashed_pass, tmp, SHA256_DIGEST_LENGTH);
+    salt[SALT_SIZE] = '\0';
+
+    tmp = sqlite3_column_blob(res, 1);
+    memcpy(salt, tmp, SALT_SIZE);
+    db_hashed_pass[SHA256_DIGEST_LENGTH] = '\0';
+  }
+  else {
+    /* sqlite3 could not find the row of the specified username, and they therefore
+    do not exist */
+    strcpy(err_msg, "user does not exist");
+    goto cleanup;
   }
   sqlite3_finalize(res);
 
-  if(status == 1) {
-    strcpy(msg, "error: user ");
-    strcat(msg, node->acc_details.username);
-    strcat(msg, " is already logged in");
-    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
-    sqlite3_close(db);
-    return -1;
-  }
-  else if (strcmp(password, node->acc_details.password) != 0) {
-    strcpy(msg, "error: invalid credentials");
-    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
-    sqlite3_close(db);
-    return -1;
+  pass = parsed->log_packet.hash_password;
+  hashed_pass = hash_password( (char *) pass, SHA256_DIGEST_LENGTH, salt, SALT_SIZE);
+
+  if (memcmp(db_hashed_pass, hashed_pass, SHA256_DIGEST_LENGTH) != 0) {
+    strcpy(err_msg, "invalid credentials");
+    goto cleanup;
   }
 
-  sql = "UPDATE Users SET Status = 1 WHERE Username = ?";
+  sql = "UPDATE USERS SET STATUS = 1 WHERE USERNAME = ?1";
 
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
-  if (rc == SQLITE_OK) {
-    strcpy(name, node->acc_details.username);
+  if (rc == SQLITE_OK)
     sqlite3_bind_text(res, 1, name, -1, SQLITE_STATIC);
-  }
   else {
     fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
-    sqlite3_close(db);
-    return -1;
+    ret = 0;
+    goto cleanup;
   }
 
   step = sqlite3_step(res);
   if (step != SQLITE_DONE) {
     fprintf(stderr, "Failed to execute statement: %s \n", sqlite3_errmsg(db));
-    sqlite3_close(db);
-    return -1;
+    ret = 0;
+    goto cleanup;
   }
-  strcpy(msg, "authentification succeeded");
-  ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
-
-  /* sets the username field in the struct that manages client information
-   for the worker process*/
+  /* if control has reached here without reporting an error, the function
+  executed successfully, the user is logged  and 1 is returned */
   client_info->is_logged = true;
-  strcpy(client_info->username, node->acc_details.username);
+  memcpy(client_info->username, name, USERNAME_MAX);
+  client_info->username[USERNAME_MAX] = '\0';
+  ret = 1;
 
+  cleanup:
+
+  free(salt);
+  free(hashed_pass);
+  free(db_hashed_pass);
   sqlite3_finalize(res);
   sqlite3_close(db);
-  return COMMAND_LOGIN;
+  return ret;
 }
 
 /* This function handles a register call to the server. It checks for a variety
-of errors that can occur, such as already being logged in etc.*/
+of errors that can occur, such as already being logged in etc.
+Returns:
+1 on success
+0 on sqlite3 failure or memory failure
+-1 on failure pertaining to client account (anything that requires an error message
+be sent to the user) */
 
 int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err_msg) {
   char *sql, *name, *pubkey;
@@ -318,8 +356,10 @@ int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err
 
   salt = create_rand_salt(SALT_SIZE);
   hashed_pass = hash_password( (char *) pass, SHA256_DIGEST_LENGTH, salt, SALT_SIZE);
-  if (salt == NULL || hashed_pass == NULL)
+  if (salt == NULL || hashed_pass == NULL){
+    ret = 0;
     goto cleanup;
+  }
 
   /* If there are no errors the users identification is input into the db and
   their status is set to online automatically */
@@ -351,7 +391,8 @@ int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err
 
   /* client is now logged in so the struct is updated*/
   client_info->is_logged = true;
-  strcpy(client_info->username, name);
+  memcpy(client_info->username, name, USERNAME_MAX);
+  client_info->username[USERNAME_MAX] = '\0';
   ret = 1;
 
   cleanup:
@@ -637,7 +678,7 @@ fetched_userinfo_t *fetch_db_user_info(client_t *client_info) {
     }
     fetched->encrypt_sz = size;
     printf("size of stored encrypted keys: %d vs %d\n", size, sqlite3_column_bytes(res, 1));
-    fetched->encrypted_keys = (unsigned char *) safe_malloc(sizeof(unsigned char) * size);
+    fetched->encrypted_keys = (unsigned char *) safe_malloc(sizeof(unsigned char) * size+1);
     if (fetched->encrypted_keys == NULL)
       goto cleanup;
     tmp = sqlite3_column_blob(res, 1);

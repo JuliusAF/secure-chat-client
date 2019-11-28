@@ -10,6 +10,10 @@
 #include "client_network.h"
 #include "client_utilities.h"
 
+/* The following four functions are used during register requests from users,
+as well as when the server returns a successful login attempt, thereby sending
+an encrypted RSA key pair over the socket */
+
 /* turns a keypair struct into a byte stream. This will be later encrypted
 using AES
 The formated of the serialization is:
@@ -42,7 +46,6 @@ unsigned char *serialize_keypair(keypair_t *k, int size) {
 
 /* converts a byte stream containing the key pair back into a keypair_t struct.
 The format of the bytes is privlen, privkey, publen, punkey */
-
 keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
   unsigned char *tmp, *tmpend;
   keypair_t *keypair = NULL;
@@ -94,7 +97,7 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
   return keypair;
 }
 
-/* serializes all of the components of a register packet. This includes the username and password
+/* serializes all of the components of a register packet. This includes the username and hashed password
 of the request, as well as the created RSA key pair. The key pair will be serialized and encrypted
 with the master key (function of username and password) using AES-128-CBC. The makeup
 of this serialized byte array can be found in the README under protocol->register*/
@@ -126,10 +129,13 @@ unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypai
   }
 
   hashed_pass = hash_password(n->acc_details.password, strlen(n->acc_details.password), NULL, 0);
+  printf("password from user: %ld\n", strlen(n->acc_details.password));
   if (hashed_pass == NULL) {
     error = true;
     goto cleanup;
   }
+  printf("hash password on client side:\n");
+  print_hex(hashed_pass, SHA256_DIGEST_LENGTH);
 
   payload_sz = USERNAME_MAX + SHA256_DIGEST_LENGTH + sizeof(int) + k->publen +
                IV_SIZE + sizeof(int) + encrypted_sz;
@@ -193,6 +199,8 @@ packet_t *gen_c_register_packet(command_t *n, request_t *r) {
     return NULL;
   }
 
+  /* the size of the payload is calculated in the following function and
+  stored in the payload_sz integer */
   payload = serialize_register(n, r->masterkey, keys, &payload_sz);
   if (payload == NULL && payload_sz < 1) {
     free_keypair(keys);
@@ -202,5 +210,58 @@ packet_t *gen_c_register_packet(command_t *n, request_t *r) {
   header->pckt_sz = payload_sz;
 
   free_keypair(keys);
+  return pack_packet(header, payload);
+}
+
+/* The following two functions handle the assimilation of a login request packet */
+
+/* */
+unsigned char *serialize_login(command_t *n) {
+  unsigned char *payload, *tmp, *hashed_pass;
+
+  if (n == NULL)
+    return NULL;
+
+  hashed_pass = hash_password(n->acc_details.password, strlen(n->acc_details.password), NULL, 0);
+  if (hashed_pass == NULL)
+    return NULL;
+
+  payload = (unsigned char *) safe_malloc(sizeof(unsigned char) * LOGIN_REQUEST_SIZE);
+  if (payload == NULL){
+    free(hashed_pass);
+    return NULL;
+  }
+  memset(payload, '\0', LOGIN_REQUEST_SIZE);
+  tmp = payload;
+
+  memcpy(tmp, n->acc_details.username, strlen(n->acc_details.username));
+  tmp += USERNAME_MAX;
+  memcpy(tmp, hashed_pass, SHA256_DIGEST_LENGTH);
+
+  free(hashed_pass);
+  return payload;
+}
+
+packet_t *gen_c_login_packet(command_t *n) {
+  packet_hdr_t *header;
+  unsigned char *payload;
+
+  if (n == NULL)
+    return NULL;
+
+  header = (packet_hdr_t *) safe_malloc(sizeof(packet_hdr_t));
+  if (header == NULL)
+    return NULL;
+
+  header->pckt_id = C_MSG_LOGIN;
+  header->pckt_sz = LOGIN_REQUEST_SIZE;
+  memset(header->sig, '\0', MAX_SIG_SZ);
+
+  payload = serialize_login(n);
+  if (payload == NULL) {
+    free(header);
+    return NULL;
+  }
+
   return pack_packet(header, payload);
 }

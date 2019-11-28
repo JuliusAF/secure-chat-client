@@ -28,6 +28,7 @@ typedef struct client_info {
 void worker(int connfd, int from_parent[2], int to_parent[2]);
 void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd);
 void handle_client_register(client_parsed_t *p, client_t *client_info);
+void handle_client_login(client_parsed_t *p, client_t *client_info, uint16_t id);
 
 
 #endif

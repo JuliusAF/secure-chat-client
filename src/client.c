@@ -119,6 +119,7 @@ int main(int argc, const char* argv[]) {
 			}
 			else if (bytes_read == 0) {
 				printf("Lost connection to server. Closing client.\n");
+				free(server_output);
 				break;
 			}
 			printf("reached packet unpacking\n");
@@ -143,6 +144,7 @@ int main(int argc, const char* argv[]) {
 
 	SSL_free(ssl);
   SSL_CTX_free(ctx);
+	free_keypair(user->rsa_keys);
 	free(user);
 	free(request);
 	close(socketfd);

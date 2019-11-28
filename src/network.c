@@ -177,6 +177,8 @@ int read_packet_from_socket(SSL *ssl, int fd, unsigned char *buffer) {
 
     total += bytes_read;
   }
+  /* ensures that the amount of data the packet claims to have is equal to the
+  number of bytes read */
   if (total != (int) packet_sz) {
     fprintf(stderr, "Failed to read proper amount of bytes\n");
     return -1;

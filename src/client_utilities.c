@@ -129,10 +129,7 @@ void handle_user_input(command_t *n, user_t *u, request_t *r) {
 
   switch (n->command) {
     case COMMAND_LOGIN:
-			if (u->is_logged) {
-				print_error("client already logged in");
-				break;
-			}
+			handle_user_login(n, u, r);
       break;
     case COMMAND_REGISTER:
 			handle_user_register(n, u, r);
@@ -206,6 +203,50 @@ void handle_user_register(command_t *node, user_t *user, request_t *request) {
 		request->is_request_active = true;
 }
 
+/* handles a login request from the user. Checks for any possible client side
+issues such as already being logged in. If all checks pass, the request struct
+is updated and a login packet is sent to the server */
+void handle_user_login(command_t *node, user_t *user, request_t *request) {
+	int ret;
+	unsigned char *masterkey;
+	packet_t *packet;
+
+	if (node == NULL || user == NULL || request == NULL)
+		return;
+
+	if (request->is_request_active) {
+		print_error("there is already an active register request");
+		return;
+	}
+	if (user->is_logged) {
+		print_error("client is already logged in");
+		return;
+	}
+
+	/* inputs data calculated when the command is invoked, like the masterkey and
+	the username the user entered */
+ strncpy(request->username, node->acc_details.username, strlen(node->acc_details.username));
+ masterkey = gen_master_key(node->acc_details.username, node->acc_details.password);
+ if (masterkey == NULL)
+	 return;
+
+ memcpy(request->masterkey, masterkey, MASTER_KEY_LEN+1);
+ free(masterkey);
+
+ packet = gen_c_login_packet(node);
+ if (packet == NULL)
+	 return;
+
+ 	/* if there were no errors, the register request was successfully sent to
+	the server */
+	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
+	if (ret < 1)	{
+		fprintf(stderr, "failed to send user register packet\n");
+	}
+	else
+		request->is_request_active = true;
+}
+
 /* prints a custom error message*/
 void print_error(char *s) {
 	if (s == NULL)
@@ -221,6 +262,7 @@ data obtained from the server if necessary and printing messages */
 socket and acts on the information accordingly */
 void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
 	printf("reached handle server input\n");
+	printf("parse id now: %d\n", p->id);
 	switch (p->id) {
     case S_MSG_PUBMSG:
       break;
@@ -234,11 +276,13 @@ void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
 			handle_server_log_pass(p, u, r);
       break;
     case S_META_LOGIN_FAIL:
+			handle_server_log_fail(p, u, r);
       break;
     case S_META_REGISTER_PASS:
 			handle_server_log_pass(p, u, r);
       break;
     case S_META_REGISTER_FAIL:
+			handle_server_log_fail(p, u, r);
       break;
     default:
       break;
@@ -246,8 +290,9 @@ void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
 
 }
 
+/* this function handles packets sent from the server on register or login
+success. In both these instances the same data is returned, so this function can */
 void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
-	printf("reached handle log pass\n");
 	int decrypt_sz, encrypt_sz;
 	unsigned char decrypted_keys[CHUNK], *encrypted_keys, *iv,
 	*masterkey;
@@ -267,6 +312,8 @@ void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
 		return;
 	}
 
+	printf("parse id later: %d\n", p->id);
+
 	iv = p->user_details.iv;
 	encrypt_sz = p->user_details.encrypt_sz;
 	encrypted_keys = p->user_details.encrypted_keys;
@@ -284,16 +331,35 @@ void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
 	if (keys == NULL)
 		return;
 
-	printf("private key: %s\n", keys->privkey);
-	printf("public key: %s\n", keys->pubkey);
-
-	if (strlen(r->username) > USERNAME_MAX)
-		return;
-	strncpy(u->username, r->username, strlen(r->username));
+	memcpy(u->username, r->username, USERNAME_MAX);
+	u->username[USERNAME_MAX] = '\0';
 	memcpy(u->masterkey, r->masterkey, MASTER_KEY_LEN);
 	u->masterkey[MASTER_KEY_LEN] = '\0';
 	u->rsa_keys = keys;
 	u->is_logged = true;
 	r->is_request_active = false;
 
+	if (p->id == S_META_LOGIN_PASS)
+		printf("authentification succeeded\n");
+	else if (p->id == S_META_REGISTER_PASS)
+		printf("registration succeeded\n");
+}
+
+void handle_server_log_fail(server_parsed_t *p, user_t *u, request_t *r) {
+	if (!is_server_parsed_legal(p) ||
+			u == NULL || r == NULL ||
+			(p->id != S_META_REGISTER_FAIL &&
+			 p->id != S_META_LOGIN_FAIL))
+		return;
+
+	if (!r->is_request_active){
+		fprintf(stderr, "no active login/register request\n");
+		return;
+	}
+
+	r->is_request_active = false;
+	strcpy(r->username, "");
+	memset(r->masterkey, '\0', MASTER_KEY_LEN+1);
+
+	print_error(p->error_message);
 }
