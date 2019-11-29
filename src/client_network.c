@@ -334,8 +334,6 @@ packet_t *gen_c_pubmsg_packet(command_t *n, user_t *u) {
   if (ret < 1)
     return NULL;
 
-  printf("concat message: %s\n", message);
-
   payload_sz = sizeof(int) + u->rsa_keys->publen + sizeof(int) + strlen(message);
   payload = serialize_pubmsg(message, u, payload_sz);
   if (payload == NULL)

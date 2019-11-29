@@ -5,6 +5,7 @@
 #include <sqlite3.h>
 #include "server_utilities.h"
 #include "parse_client_input.h"
+#include "database_utilities.h"
 
 typedef struct fetched_user_info {
   unsigned char iv[IV_SIZE+1];
@@ -16,6 +17,7 @@ typedef struct fetched_user_info {
 the database*/
 sqlite3 *open_database(void);
 int initialize_database(void);
+/* helper functions pertaining to the fetched_user_info struct */
 bool is_fetched_userinfo_legal(fetched_userinfo_t *f);
 void free_fetched_userinfo(fetched_userinfo_t *f);
 

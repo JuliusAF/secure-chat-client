@@ -2,12 +2,14 @@ SERVER_SOURCES = src/server.c src/parse_client_input.c \
 								 src/safe_wrappers.c src/network.c \
 								 src/database.c src/server_utilities.c \
 								 src/ssl-nonblock.c src/cryptography.c \
-								 src/server_network.c src/parse_user_input.c
+								 src/server_network.c src/parse_user_input.c \
+								 src/database_utilities.c
 
 SERVER_HEADERS = src/safe_wrappers.h src/parse_client_input.h \
 								 src/network.h src/database.h src/parse_user_input.h \
 								 src/server_utilities.h src/ssl-nonblock.h \
-								 src/cryptography.h src/server_network.h
+								 src/cryptography.h src/server_network.h \
+								 src/database_utilities.h
 
 CLIENT_SOURCES = src/client.c src/parse_server_input.c\
 								 src/safe_wrappers.c src/network.c \
