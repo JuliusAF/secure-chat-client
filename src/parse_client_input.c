@@ -22,7 +22,7 @@ client_parsed_t *parse_client_input(packet_t *p) {
     return NULL;
   }
 
-  parsed = (client_parsed_t *) safe_malloc(sizeof(client_parsed_t));
+  parsed = safe_malloc(sizeof(client_parsed_t));
 
   if (parsed == NULL)
     return NULL;
@@ -47,7 +47,7 @@ client_parsed_t *parse_client_input(packet_t *p) {
     case C_MSG_PUBMSG:
       break;
     case C_MSG_USERS:
-      ret = -1;
+      ret = parse_client_users(p, parsed);
       break;
     case C_META_PUBKEY_RQST:
       break;
@@ -90,14 +90,13 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
   tmpend = tmp + total;
 
   /* allocates memory for the variables that have a constant size */
-  parsed->reg_packet.username = (char *) safe_malloc(sizeof(char) * USERNAME_MAX+1);
+  parsed->reg_packet.username = safe_malloc(sizeof(char) * USERNAME_MAX+1);
   if (parsed->reg_packet.username == NULL)
     return -1;
-  parsed->reg_packet.hash_password =
-      (unsigned char *) safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH+1);
+  parsed->reg_packet.hash_password = safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH+1);
   if (parsed->reg_packet.hash_password == NULL)
     return -1;
-  parsed->reg_packet.iv = (unsigned char *) safe_malloc(sizeof(char) * IV_SIZE+1);
+  parsed->reg_packet.iv = safe_malloc(sizeof(char) * IV_SIZE+1);
   if (parsed->reg_packet.iv == NULL)
     return -1;
 
@@ -118,7 +117,7 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
     return -1;
   }
 
-  parsed->reg_packet.pubkey = (char *) safe_malloc(sizeof(unsigned char) * parsed->reg_packet.publen+1);
+  parsed->reg_packet.pubkey = safe_malloc(sizeof(unsigned char) * parsed->reg_packet.publen+1);
   if (parsed->reg_packet.pubkey == NULL)
     return -1;
 
@@ -137,7 +136,7 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
   }
 
   parsed->reg_packet.encrypted_keys =
-    (unsigned char *) safe_malloc(sizeof(unsigned char) * parsed->reg_packet.encrypt_sz+1);
+    safe_malloc(sizeof(unsigned char) * parsed->reg_packet.encrypt_sz+1);
   if (parsed->reg_packet.encrypted_keys == NULL)
     return -1;
 
@@ -162,9 +161,8 @@ int parse_client_login(packet_t *packet, client_parsed_t *parsed) {
   if (packet->header->pckt_sz != LOGIN_REQUEST_SIZE)
     return -1;
 
-  parsed->log_packet.username = (char *) safe_malloc(sizeof(char) * USERNAME_MAX+1);
-  parsed->log_packet.hash_password =
-      (unsigned char *) safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH+1);
+  parsed->log_packet.username = safe_malloc(sizeof(char) * USERNAME_MAX+1);
+  parsed->log_packet.hash_password = safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH+1);
   if (parsed->log_packet.username == NULL ||
       parsed->log_packet.hash_password == NULL)
     return -1;
@@ -209,6 +207,7 @@ void initialize_client_parsed(client_parsed_t *p) {
 
   switch (p->id) {
     case C_MSG_EXIT:
+      /* nothing to initialize */
       break;
     case C_MSG_LOGIN:
       p->log_packet.username = NULL;
@@ -226,6 +225,7 @@ void initialize_client_parsed(client_parsed_t *p) {
     case C_MSG_PUBMSG:
       break;
     case C_MSG_USERS:
+      /* nothing to initialize */
       break;
     case C_META_PUBKEY_RQST:
       break;
@@ -242,6 +242,7 @@ bool is_client_parsed_legal(client_parsed_t *p) {
 
   switch (p->id) {
     case C_MSG_EXIT:
+      /* nothing to check in this instance */
       break;
     case C_MSG_LOGIN:
       if (p->log_packet.username == NULL ||
@@ -261,6 +262,7 @@ bool is_client_parsed_legal(client_parsed_t *p) {
     case C_MSG_PUBMSG:
       break;
     case C_MSG_USERS:
+      /* nothing to check in this instance */
       break;
     case C_META_PUBKEY_RQST:
       break;
@@ -277,6 +279,7 @@ void free_client_parsed(client_parsed_t *p) {
 
   switch (p->id) {
     case C_MSG_EXIT:
+      /* nothing to free in this instance */
       break;
     case C_MSG_LOGIN:
       free(p->log_packet.username);
@@ -294,6 +297,7 @@ void free_client_parsed(client_parsed_t *p) {
     case C_MSG_PUBMSG:
       break;
     case C_MSG_USERS:
+      /* nothing to free in this instance */
       break;
     case C_META_PUBKEY_RQST:
       break;

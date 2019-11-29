@@ -142,7 +142,8 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
       parsed = NULL;
       packet = NULL;
       input = NULL;
-      input = (unsigned char *) safe_malloc(sizeof(unsigned char) * MAX_PACKET_SIZE);
+
+      input = safe_malloc(sizeof(unsigned char) * MAX_PACKET_SIZE);
       if (input == NULL)
         continue;
       bytes_read = read_packet_from_socket(ssl, connfd, input);
@@ -171,9 +172,12 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
         goto cleanup;
       }
 
+      printf("packet id: %d\n", packet->header->pckt_id);
       parsed = parse_client_input(packet);
       if (parsed == NULL)
         goto cleanup;
+
+      printf("reaches handle function\n");
 
       handle_client_input(parsed, client_info, to_parent[1]);
 
@@ -232,8 +236,6 @@ bool is_client_sig_good(packet_t *p, client_t *c) {
   key = EVP_PKEY_new();
   /* hash the payload. The hashed payload is what was originally signed */
   hash = hash_input( (char *) p->payload, p->header->pckt_sz);
-  if (hash == NULL)
-    return false;
 
   bio = BIO_new_mem_buf(pubkey, publen);
   rsa = PEM_read_bio_RSAPublicKey(bio, NULL, NULL, NULL);
@@ -267,6 +269,7 @@ void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd) 
     case C_MSG_PUBMSG:
       break;
     case C_MSG_USERS:
+      handle_client_users(p, client_info);
       break;
     case C_META_PUBKEY_RQST:
       break;
@@ -299,6 +302,7 @@ void handle_client_login(client_parsed_t *p, client_t *client_info) {
   }
   else
     return;
+
   /* if ret < 0 there was a verification error. This error is sent to client */
   if (ret < 0) {
     packet = gen_s_error_packet(fail_id, err);
@@ -312,7 +316,8 @@ void handle_client_login(client_parsed_t *p, client_t *client_info) {
     send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
     return;
   }
-  //create register packet
+
+  /* fetch the user info for the user */
   fetched = fetch_db_user_info(client_info);
   if (!is_fetched_userinfo_legal(fetched)) {
     /* another instance of database failure that the client must be made aware of */
@@ -320,6 +325,7 @@ void handle_client_login(client_parsed_t *p, client_t *client_info) {
     send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
     goto cleanup;
   }
+  /* generate packet and send */
   packet = gen_s_userinfo_packet(fetched, succ_id);
   ret = send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
   if (ret < 1)
@@ -330,4 +336,28 @@ void handle_client_login(client_parsed_t *p, client_t *client_info) {
   free_fetched_userinfo(fetched);
 }
 
-void handle_client_users(client_parsed_t *p, client_t *client_info);
+void handle_client_users(client_parsed_t *p, client_t *client_info) {
+  int ret;
+  char *fetched;
+  packet_t *packet;
+
+  if (p == NULL || client_info == NULL ||
+      p->id != C_MSG_USERS)
+    return;
+
+  if (!client_info->is_logged) {
+    packet = gen_s_error_packet(S_MSG_GENERIC_ERR, "user is not currently logged in");
+    send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
+  }
+
+  fetched = fetch_db_users();
+  if (fetched == NULL)
+    return;
+
+  packet = gen_s_users_packet(fetched);
+  ret = send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
+  if (ret < 1)
+    fprintf(stderr, "failed to send user info packet\n");
+
+  free(fetched);
+}

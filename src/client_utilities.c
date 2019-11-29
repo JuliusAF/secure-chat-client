@@ -316,10 +316,8 @@ void handle_user_users(command_t *node, user_t *user) {
 	if (ret < 1)	{
 		fprintf(stderr, "failed to send user /users packet\n");
 	}
+
 }
-
-
-
 
 /* prints a custom error message*/
 void print_error(char *s) {
@@ -362,8 +360,13 @@ void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
 
 }
 
+/* this functions deals with a packet that the server returns when it receives
+a /user request from the client */
+
 /* this function handles packets sent from the server on register or login
-success. In both these instances the same data is returned, so this function can */
+success. In both these instances the same data is returned, so this function can.
+This function checks for any errors, and if there are none sets the client to logged
+in and sets all the necessary variables */
 void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
 	int decrypt_sz, encrypt_sz;
 	unsigned char decrypted_keys[CHUNK], *encrypted_keys, *iv,

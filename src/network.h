@@ -13,6 +13,10 @@ is defined to ensure a benchmark for packet size */
 #define MAX_PAYLOAD_SIZE (MAX_PACKET_SIZE - HEADER_SIZE)
 /* a login request has a fixed size defined here */
 #define LOGIN_REQUEST_SIZE USERNAME_MAX + SHA256_DIGEST_LENGTH
+/* defines the payload for a user request. Used to create signature and is
+a constant as a user command requires no information from the client */
+#define USERS_MSG_PAYLOAD "client users request"
+#define USERS_MSG_SIZE 20
 
 /* define the id codes for packets from clients to server */
 #define C_MSG_EXIT 1001
@@ -24,10 +28,7 @@ is defined to ensure a benchmark for packet size */
 
 #define C_META_PUBKEY_RQST 1101
 
-/* defines the payload for a user request. Used to create signature and is
-a constant as a user command requires no information from the client */
-#define USERS_MSG_PAYLOAD "client users request"
-#define USERS_MSG_SIZE 20
+
 
 /* defines the id codes for packets from server to clients*/
 #define S_MSG_PUBMSG 2001

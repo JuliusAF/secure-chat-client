@@ -7,7 +7,6 @@
 #include "parse_user_input.h"
 
 #define MAX_CLIENTS 30
-#define DATE_FORMAT "%Y-%m-%d %H:%M:%S"
 /* The server and workers communicate over the pipes.
 The communication between them, however, is very simple and
 there is no need for elaborate messages. The workers tell the server
@@ -32,6 +31,5 @@ bool is_client_sig_good(packet_t *p, client_t *c);
 void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd);
 void handle_client_login(client_parsed_t *p, client_t *client_info);
 void handle_client_users(client_parsed_t *p, client_t *client_info);
-
 
 #endif

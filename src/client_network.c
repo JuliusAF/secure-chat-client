@@ -28,7 +28,7 @@ unsigned char *serialize_keypair(keypair_t *k, int size) {
   if(!is_keypair_legal(k) || size < 0)
     return NULL;
 
-  serialized = (unsigned char *) safe_malloc(sizeof(unsigned char) * size);
+  serialized = safe_malloc(sizeof(unsigned char) * size);
   if (serialized == NULL)
     return NULL;
 
@@ -53,7 +53,7 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
   if (serialized == NULL ||size < 0)
     return NULL;
 
-  keypair = (keypair_t *) safe_malloc(sizeof(keypair_t));
+  keypair = safe_malloc(sizeof(keypair_t));
   if (keypair == NULL)
     return NULL;
   keypair->privkey = NULL;
@@ -70,7 +70,7 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
     return NULL;
   }
 
-  keypair->privkey = (char *) safe_malloc(sizeof(char) * keypair->privlen+1);
+  keypair->privkey = safe_malloc(sizeof(char) * keypair->privlen+1);
   if (keypair->privkey == NULL) {
     free_keypair(keypair);
     return NULL;
@@ -86,7 +86,7 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
     return NULL;
   }
 
-  keypair->pubkey = (char *) safe_malloc(sizeof(char) * keypair->publen+1);
+  keypair->pubkey = safe_malloc(sizeof(char) * keypair->publen+1);
   if (keypair->pubkey == NULL) {
     free_keypair(keypair);
     return NULL;
@@ -138,7 +138,7 @@ unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypai
                IV_SIZE + sizeof(int) + encrypted_sz;
   *size = payload_sz;
 
-  payload = (unsigned char *) safe_malloc(sizeof(unsigned char) * payload_sz);
+  payload = safe_malloc(sizeof(unsigned char) * payload_sz);
   if (payload == NULL){
     error = true;
     goto cleanup;
@@ -220,7 +220,7 @@ unsigned char *serialize_login(command_t *n) {
   if (hashed_pass == NULL)
     return NULL;
 
-  payload = (unsigned char *) safe_malloc(sizeof(unsigned char) * LOGIN_REQUEST_SIZE);
+  payload = safe_malloc(sizeof(unsigned char) * LOGIN_REQUEST_SIZE);
   if (payload == NULL){
     free(hashed_pass);
     return NULL;
@@ -269,7 +269,7 @@ packet_t *gen_c_users_packet(command_t *n) {
   if (n == NULL || n->command != COMMAND_USERS)
     return NULL;
 
-  payload = (unsigned char *) safe_malloc(sizeof(unsigned char) * USERS_MSG_SIZE);
+  payload = safe_malloc(sizeof(unsigned char) * USERS_MSG_SIZE);
   if (payload == NULL)
     return NULL;
 

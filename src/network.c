@@ -184,7 +184,7 @@ returns a pointer to the structure that is later free with free_packet() */
 packet_hdr_t *initialize_header(uint16_t id, uint32_t sz) {
   packet_hdr_t *header;
 
-  header = (packet_hdr_t *) safe_malloc(sizeof(packet_hdr_t));
+  header = safe_malloc(sizeof(packet_hdr_t));
   if (header == NULL)
     return NULL;
 
@@ -203,7 +203,7 @@ packet_t *pack_packet(packet_hdr_t *header, unsigned char *payload) {
   if (header == NULL || payload == NULL)
     return NULL;
 
-  p = (packet_t *) safe_malloc(sizeof(packet_t));
+  p = safe_malloc(sizeof(packet_t));
   if (p == NULL)
     return NULL;
 
@@ -230,7 +230,7 @@ unsigned char *serialize_packet(packet_t *p) {
   hdr = p->header;
   data = p->payload;
   size = (int) (HEADER_SIZE+hdr->pckt_sz);
-  serialized = (unsigned char *) safe_malloc(sizeof(unsigned char) * size);
+  serialized = safe_malloc(sizeof(unsigned char) * size);
   if (serialized == NULL){
     free_packet(p);
     return NULL;
@@ -262,10 +262,10 @@ packet_t *unpack_packet(unsigned char *buffer, int size) {
     || size > MAX_PACKET_SIZE)
     return NULL;
 
-  packet = (packet_t *) safe_malloc(sizeof(packet_t));
+  packet = safe_malloc(sizeof(packet_t));
   if (packet == NULL)
     return NULL;
-  header = (packet_hdr_t *) safe_malloc(sizeof(packet_hdr_t));
+  header = safe_malloc(sizeof(packet_hdr_t));
   if (header == NULL) {
     free(packet);
     return NULL;
@@ -279,7 +279,7 @@ packet_t *unpack_packet(unsigned char *buffer, int size) {
     return NULL;
   }
 
-  payload = (unsigned char *) safe_malloc(sizeof(unsigned char) * header->pckt_sz);
+  payload = safe_malloc(sizeof(unsigned char) * header->pckt_sz);
   if (payload == NULL) {
     free(packet);
     free(header);
@@ -294,6 +294,13 @@ packet_t *unpack_packet(unsigned char *buffer, int size) {
   memcpy(header->sig, buffer+index, MAX_SIG_SZ);
   index += MAX_SIG_SZ;
   memcpy(payload, buffer+index, header->pckt_sz);
+
+  if (header->siglen > MAX_SIG_SZ) {
+    fprintf(stderr, "signature size is larger than is possible \n");
+    free(packet);
+    free(header);
+    return NULL;
+  }
 
   packet->header = header;
   packet->payload = payload;

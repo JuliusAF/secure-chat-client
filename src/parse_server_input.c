@@ -20,7 +20,7 @@ server_parsed_t *parse_server_input(packet_t *p) {
     return NULL;
   }
 
-  parsed = (server_parsed_t *) safe_malloc(sizeof(server_parsed_t));
+  parsed = safe_malloc(sizeof(server_parsed_t));
   if (parsed == NULL)
     return NULL;
 
@@ -88,7 +88,7 @@ int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed) {
     return -1;
   }
 
-  parsed->user_details.iv = (unsigned char *) safe_malloc(sizeof(unsigned char) * IV_SIZE+1);
+  parsed->user_details.iv = safe_malloc(sizeof(unsigned char) * IV_SIZE+1);
   if (parsed->user_details.iv == NULL)
     return -1;
 
@@ -104,8 +104,7 @@ int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed) {
     return -1;
   }
 
-  parsed->user_details.encrypted_keys =
-      (unsigned char *) safe_malloc(sizeof(unsigned char) * parsed->user_details.encrypt_sz+1);
+  parsed->user_details.encrypted_keys = safe_malloc(sizeof(unsigned char) * parsed->user_details.encrypt_sz+1);
   if (parsed->user_details.encrypted_keys == NULL)
     return -1;
 
@@ -139,7 +138,7 @@ int parse_server_error(packet_t *packet, server_parsed_t *parsed) {
   if (size > MAX_PAYLOAD_SIZE)
     return -1;
 
-  parsed->error_message = (char *) safe_malloc(sizeof(char) * size+1);
+  parsed->error_message = safe_malloc(sizeof(char) * size+1);
   if (parsed->error_message == NULL)
     return -1;
 

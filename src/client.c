@@ -84,7 +84,7 @@ int main(int argc, const char* argv[]) {
 		select(maxfd+1, &selectfds, NULL, NULL, NULL);
 
 		if (FD_ISSET(STDIN_FILENO, &selectfds)) {
-			input = (char *) safe_malloc(sizeof(char) * CHUNK);
+			input = safe_malloc(sizeof(char) * CHUNK);
 			bytes_read = read_stdin(input, CHUNK);
 			if (bytes_read == 0)
 				break;
@@ -109,7 +109,7 @@ int main(int argc, const char* argv[]) {
 			parsed = NULL;
 			packet = NULL;
 
-			server_output = (unsigned char *) safe_malloc(sizeof(char) * MAX_PACKET_SIZE+1);
+			server_output = safe_malloc(sizeof(char) * MAX_PACKET_SIZE+1);
 			if (server_output == NULL)
 				continue;
 			bytes_read = read_packet_from_socket(ssl, socketfd, server_output);
