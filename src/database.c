@@ -175,15 +175,14 @@ they match.
 Returns:
 1 on success
 0 on sqlite3 failure or memory failure
--1 on failure pertaining to client account (anything that requires an error message
-be sent to the user) */
+-1 on failure pertaining to client account verification etc. */
 
 int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_msg) {
-  char *sql, *name = NULL;
+  char *sql, *name = NULL, *pubkey = NULL;
   unsigned char *pass = NULL, *salt = NULL, *hashed_pass = NULL,
   *db_hashed_pass = NULL;
   const unsigned char *tmp = NULL;
-  int ret = -1, rc, step, status;
+  int ret = -1, rc, step, status, publen;
   sqlite3_stmt *res = NULL;
   sqlite3 *db = NULL;
 
@@ -202,9 +201,11 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
   }
   name = parsed->log_packet.username;
 
-  /* this statement gets the password and salt from the database for
-  verification of login credentials */
-  sql = "SELECT PASSWORD, SALT, STATUS FROM USERS WHERE USERNAME = ?1";
+  /* this statement gets the password, salt and status from the database for
+  verification of login credentials
+  Also gets the length of pubkey and pubkey. If verification is successful, these
+  are stored by the server */
+  sql = "SELECT PASSWORD, SALT, STATUS, PUBKEY_LEN, PUBKEY FROM USERS WHERE USERNAME = ?1";
 
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK)
@@ -215,6 +216,7 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
     goto cleanup;
   }
 
+  /* allocate space for variables with fixed size that will be selected from databse */
   salt = (unsigned char *) safe_malloc(sizeof(unsigned char) * SALT_SIZE+1);
   db_hashed_pass = (unsigned char *) safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH+1);
   if (salt == NULL && db_hashed_pass == NULL){
@@ -237,7 +239,6 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
       ret = 0;
       goto cleanup;
     }
-
     /* copy the data in the database to the variables for login verification */
     tmp = sqlite3_column_blob(res, 0);
     memcpy(db_hashed_pass, tmp, SHA256_DIGEST_LENGTH);
@@ -246,6 +247,17 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
     tmp = sqlite3_column_blob(res, 1);
     memcpy(salt, tmp, SALT_SIZE);
     db_hashed_pass[SHA256_DIGEST_LENGTH] = '\0';
+
+    /* get the size of the public key and allocate the necessary space */
+    publen = sqlite3_column_int(res, 3);
+    pubkey = (char *) safe_malloc(sizeof(char) * publen+1);
+    if (pubkey == NULL) {
+      ret = 0;
+      goto cleanup;
+    }
+    tmp = sqlite3_column_blob(res, 4);
+    memcpy(pubkey, tmp, publen);
+    pubkey[publen] = '\0';
   }
   else {
     /* sqlite3 could not find the row of the specified username, and they therefore
@@ -254,12 +266,14 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
     goto cleanup;
   }
   sqlite3_finalize(res);
+  res = NULL;
 
   pass = parsed->log_packet.hash_password;
   hashed_pass = hash_password( (char *) pass, SHA256_DIGEST_LENGTH, salt, SALT_SIZE);
 
   if (memcmp(db_hashed_pass, hashed_pass, SHA256_DIGEST_LENGTH) != 0) {
     strcpy(err_msg, "invalid credentials");
+    free(pubkey);
     goto cleanup;
   }
 
@@ -271,6 +285,7 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
   else {
     fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
     ret = 0;
+    free(pubkey);
     goto cleanup;
   }
 
@@ -278,6 +293,7 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
   if (step != SQLITE_DONE) {
     fprintf(stderr, "Failed to execute statement: %s \n", sqlite3_errmsg(db));
     ret = 0;
+    free(pubkey);
     goto cleanup;
   }
   /* if control has reached here without reporting an error, the function
@@ -285,6 +301,8 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
   client_info->is_logged = true;
   memcpy(client_info->username, name, USERNAME_MAX);
   client_info->username[USERNAME_MAX] = '\0';
+  client_info->publen = publen;
+  client_info->pubkey = pubkey;
   ret = 1;
 
   cleanup:
@@ -302,11 +320,10 @@ of errors that can occur, such as already being logged in etc.
 Returns:
 1 on success
 0 on sqlite3 failure or memory failure
--1 on failure pertaining to client account (anything that requires an error message
-be sent to the user) */
+-1 on failure pertaining to client account */
 
 int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err_msg) {
-  char *sql, *name, *pubkey;
+  char *sql, *name, *pubkey, *pubkey1;
   unsigned char *pass, *iv, *keys,
   *salt = NULL, *hashed_pass = NULL;
   int ret = -1, rc, step, publen, keyslen;
@@ -388,11 +405,22 @@ int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err
     ret = 0;
     goto cleanup;
   }
+  /* create and store pubkey variable for storage in client info struct */
+  pubkey1 = (char *) safe_malloc(sizeof(char) * publen+1);
+  if (pubkey1 == NULL) {
+    ret = 0;
+    goto cleanup;
+  }
+  memcpy(pubkey1, pubkey, publen);
+  pubkey1[publen] = '\0';
 
   /* client is now logged in so the struct is updated*/
   client_info->is_logged = true;
   memcpy(client_info->username, name, USERNAME_MAX);
   client_info->username[USERNAME_MAX] = '\0';
+  client_info->publen = publen;
+  client_info->pubkey = pubkey1;
+
   ret = 1;
 
   cleanup:
@@ -677,7 +705,6 @@ fetched_userinfo_t *fetch_db_user_info(client_t *client_info) {
       goto cleanup;
     }
     fetched->encrypt_sz = size;
-    printf("size of stored encrypted keys: %d vs %d\n", size, sqlite3_column_bytes(res, 1));
     fetched->encrypted_keys = (unsigned char *) safe_malloc(sizeof(unsigned char) * size+1);
     if (fetched->encrypted_keys == NULL)
       goto cleanup;

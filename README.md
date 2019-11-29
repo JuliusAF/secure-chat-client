@@ -62,6 +62,7 @@ The header consists of:
 
 - 4 bytes for length of data
 - 2 bytes for identification code
+- 4 bytes for length of signature
 - 256 bytes for the signature. This field may be left empty depending on what type of packet is sent and from/to whom
 
 ## From client to server communication:

@@ -29,7 +29,7 @@ CC = gcc
 
 .PHONY: all tarball clean
 
-all: $(TARGETS) $(KEYS)
+all: $(TARGETS) $(KEYS) copyfiles
 
 tarball: sp-assignment1.tar.gz
 
@@ -69,3 +69,7 @@ server-csr.pem:
 
 server-key.pem:
 	openssl genrsa -out serverkeys/server-key.pem
+
+copyfiles:
+	cp ttpkeys/ca-cert.pem clientkeys/
+	cp serverkeys/server-ca-cert.pem clientkeys/

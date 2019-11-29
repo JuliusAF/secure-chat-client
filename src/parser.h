@@ -113,6 +113,7 @@ void free_node(command_t *node);
 client_parsed_t *parse_client_input(packet_t *p);
 int parse_client_register(packet_t *packet, client_parsed_t *parsed);
 int parse_client_login(packet_t *packet, client_parsed_t *parsed);
+int parse_client_users(packet_t *packet, client_parsed_t *parsed);
 void initialize_client_parsed(client_parsed_t *p) ;
 bool is_client_parsed_legal(client_parsed_t *p);
 void free_client_parsed(client_parsed_t *p);

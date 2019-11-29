@@ -22,13 +22,16 @@ typedef struct client_info {
   SSL *ssl;
   bool is_logged;
   char username[USERNAME_MAX+1];
+  unsigned int publen;
+  char *pubkey;
   time_t last_updated;
 } client_t;
 
 void worker(int connfd, int from_parent[2], int to_parent[2]);
+bool is_client_sig_good(packet_t *p, client_t *c);
 void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd);
-void handle_client_register(client_parsed_t *p, client_t *client_info);
-void handle_client_login(client_parsed_t *p, client_t *client_info, uint16_t id);
+void handle_client_login(client_parsed_t *p, client_t *client_info);
+void handle_client_users(client_parsed_t *p, client_t *client_info);
 
 
 #endif

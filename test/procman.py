@@ -6,6 +6,8 @@ import subprocess
 import sys
 import time
 
+SLEEPTIME=0.5
+
 def print_std(name, stdname, text):
   sys.stderr.write("%s for %s:\n" % (stdname, name))
   sys.stderr.write("----------\n")
@@ -27,7 +29,7 @@ class ProcessManager:
     self.startserver(sourcedir, tmpdir, tcpport)
     if self.error: return
     for i in range(clientcount):
-      time.sleep(1)
+      time.sleep(SLEEPTIME)
       self.startclient(sourcedir, tmpdir, tcpport)
       if self.error: return
 
@@ -109,6 +111,7 @@ class ProcessManager:
     stdin = self.processes[index].stdin
     stdin.write(text.encode(self.encoding))
     stdin.flush()
+    time.sleep(SLEEPTIME)
 
   def startprogram(self, sourcedir, tmpdir, args):
     # files to redirect output to
@@ -144,6 +147,7 @@ class ProcessManager:
   def waitall(self):
     # closing stdin should terminate well-written clients
     self.endinputall()
+    time.sleep(SLEEPTIME)
 
     # if there are still clients running, they are probably unresponsive and
     # must be terminated explicitly; the server always needs explicit
@@ -153,7 +157,7 @@ class ProcessManager:
       if proc.returncode == None: proc.poll()
       if proc.returncode == None: running = True
 
-    if running: time.sleep(1)
+    if running: time.sleep(SLEEPTIME)
 
     for proc in reversed(self.processes):
       if proc.returncode == None: proc.poll()

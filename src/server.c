@@ -60,7 +60,7 @@ int main(int argc, const char* argv[]) {
 	if (rc < 0) {
 		fprintf(stderr, "Failed to initialize database\n");
 		close(serverfd);
-		return 1;
+		exit(EXIT_FAILURE);
 	}
 
 	FD_ZERO(&activefds);
@@ -78,9 +78,7 @@ int main(int argc, const char* argv[]) {
 					if (connfd < 0)
 						continue;
 
-						/* denies connections if maximum no of clients is reached.
-						The communication with the client will be abstracted once network protocol
-						is implemented*/
+					/* denies connections if maximum no of clients is reached. */
 					if (free_pipe < 0) {
 						fprintf(stderr, "Maximum clients reached\n");
 						close(connfd);

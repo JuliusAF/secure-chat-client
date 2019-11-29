@@ -109,14 +109,12 @@ int send_packet_over_socket(SSL *ssl, int fd, packet_t *p) {
   }
 
   size = (int) (p->header->pckt_sz+HEADER_SIZE);
-  printf("data size from header = %d\n", p->header->pckt_sz);
-  printf("packet size = %d\n", size);
   serialized = serialize_packet(p);
   if (serialized == NULL)
     return -1;
   //printf("printinf serialized\n");
   //write(1, serialized, size);
-  printf("\n");
+  //printf("\n");
   /* write to socket until the entire packet has been sent */
   while (size > 0) {
     bytes_written = ssl_block_write(ssl, fd, serialized+total, size);
@@ -148,18 +146,15 @@ int read_packet_from_socket(SSL *ssl, int fd, unsigned char *buffer) {
       return bytes_read;
     }
     else if (bytes_read == 0) {
-      fprintf(stderr, "read closed\n");
       return 0;
     }
 
     total += bytes_read;
   }
-  printf("bytes read from header = %d\n", total);
   /* find size of data payload*/
   memcpy(&data_size, buffer, sizeof(uint32_t));
   if (data_size > MAX_PAYLOAD_SIZE)
     return -1;
-  printf("bytes of data - %d\n", data_size);
   packet_sz = HEADER_SIZE+data_size;
 
   /* continues to read from socket until the complete payload is read*/
@@ -171,7 +166,6 @@ int read_packet_from_socket(SSL *ssl, int fd, unsigned char *buffer) {
       return bytes_read;
     }
     else if (bytes_read == 0) {
-      fprintf(stderr, "read closed\n");
       return 0;
     }
 
@@ -184,6 +178,23 @@ int read_packet_from_socket(SSL *ssl, int fd, unsigned char *buffer) {
     return -1;
   }
   return total;
+}
+
+/* creates and initializes a packet header using the input provided.
+returns a pointer to the structure that is later free with free_packet() */
+packet_hdr_t *initialize_header(uint16_t id, uint32_t sz) {
+  packet_hdr_t *header;
+
+  header = (packet_hdr_t *) safe_malloc(sizeof(packet_hdr_t));
+  if (header == NULL)
+    return NULL;
+
+  header->pckt_id = id;
+  header->pckt_sz = sz;
+  header->siglen = 0;
+  memset(header->sig, '\0', MAX_SIG_SZ);
+
+  return header;
 }
 
 /* creates a packet_t struct from a packet header and payload*/
@@ -263,7 +274,7 @@ packet_t *unpack_packet(unsigned char *buffer, int size) {
 
   memcpy(&header->pckt_sz, buffer, sizeof(uint32_t));
   if (size != (int) (header->pckt_sz+HEADER_SIZE)) {
-    fprintf(stderr, "netowrk.c:264 unpack packet failed size check\n");
+    fprintf(stderr, "unpack packet failed size check\n");
     free(packet);
     free(header);
     return NULL;

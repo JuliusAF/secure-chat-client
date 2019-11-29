@@ -26,11 +26,10 @@ unsigned char *create_rand_salt(unsigned int size) {
     return NULL;
   }
 
-  printf("\n");
   return salt;
 }
 
-/* returns a hash of the password. If the hash should contain a salt,
+/* returns a hash of the input. If the hash should contain a salt,
 the input and salt are concatenated. Otherwise no salt is added */
 unsigned char *hash_password(char *input, unsigned int size, unsigned char *salt, unsigned int salt_size) {
   SHA256_CTX context;
@@ -38,6 +37,7 @@ unsigned char *hash_password(char *input, unsigned int size, unsigned char *salt
 
   if (input == NULL)
     return NULL;
+
   md = (unsigned char *) safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH);
   if (md == NULL)
     return NULL;
@@ -65,6 +65,13 @@ unsigned char *hash_password(char *input, unsigned int size, unsigned char *salt
   }
 
   return md;
+}
+
+/* wrapper function to hash things other than passwords. These never add a salt
+so the field need not be entered */
+
+unsigned char *hash_input(char *input, unsigned int size) {
+  return hash_password(input, size, NULL, 0);
 }
 
 /* generates a master key based on a users username and password. this key
@@ -231,25 +238,93 @@ void free_keypair(keypair_t *k) {
 /* applies AES-128-cbc encryption to the given output buffer, based on the given
 initialization vector and key. The key and IV are 16 bytes. The function
 also takes an 'int enc' argument like the actual openSSL interface. This specifies
-whether the function is to encrypt and decrypt, and the macro for either is defined
+whether the function is to encrypt or decrypt, and the macro for either is defined
 in cryptography.h
 Returns:
 size of encrypted/decrypted output on success
 -1 on failure */
-int apply_aes(unsigned char *output, unsigned char *input, int size, unsigned char *key, unsigned char *iv, int enc) {
-  const EVP_CIPHER *type = EVP_aes_128_cbc();
+int apply_aes(unsigned char *out, unsigned char *input, int size, unsigned char *key, unsigned char *iv, int enc) {
   int tmp, outlen, ret = 0;
+
+  if (out == NULL || input == NULL ||
+      key == NULL || iv == NULL)
+    return -1;
+
+  const EVP_CIPHER *type = EVP_aes_128_cbc();
   EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
 
   if (EVP_CipherInit(ctx, type, key, iv, enc) < 1)
     return -1;
-  if ((ret = EVP_CipherUpdate(ctx, output, &tmp, input, size)) < 1)
+  if ((ret = EVP_CipherUpdate(ctx, out, &tmp, input, size)) < 1)
     return -1;
   outlen = tmp;
-  if (EVP_CipherFinal(ctx, output+tmp, &tmp) < 1)
+  if (EVP_CipherFinal(ctx, out+tmp, &tmp) < 1)
     return -1;
   outlen += tmp;
 
   EVP_CIPHER_CTX_free(ctx);
   return outlen;
+}
+
+/* signs an input byte array into the output argument using an rsa private key passed as
+and EVP_PKEY type. Automatically frees the EVP_PKEY after use.
+Returns:
+the size of the signature on success
+0 otherwise */
+unsigned int rsa_sign_sha256(EVP_PKEY *key, unsigned char *output, unsigned char* input, unsigned int inlen) {
+  unsigned int siglen = 0;
+  EVP_MD_CTX *ctx = EVP_MD_CTX_create();
+
+  if (key == NULL || output == NULL || input == NULL)
+    goto cleanup;
+
+  if (EVP_SignInit(ctx, EVP_sha256()) != 1) {
+    ERR_print_errors_fp(stderr);
+    goto cleanup;
+  }
+  if (EVP_SignUpdate(ctx, input, inlen) != 1) {
+    ERR_print_errors_fp(stderr);
+    goto cleanup;
+  }
+  if (EVP_SignFinal(ctx, output, &siglen, key) != 1) {
+    ERR_print_errors_fp(stderr);
+    siglen = 0;
+    goto cleanup;
+  }
+
+  cleanup:
+
+  EVP_PKEY_free(key);
+  EVP_MD_CTX_free(ctx);
+  return siglen;
+}
+
+/* verifies a given signature, signed with an RSA private key. The EVP_PKEY is
+automatically freed.
+Returns:
+true on signature verification success
+false on failure or error */
+bool rsa_verify_sha256(EVP_PKEY *key, unsigned char *s, unsigned char *i, unsigned int slen, unsigned int ilen) {
+  int ret = 0;
+  EVP_MD_CTX *ctx = EVP_MD_CTX_create();
+
+  if (key == NULL || s == NULL || i == NULL)
+    goto cleanup;
+
+  if (EVP_VerifyInit(ctx, EVP_sha256()) != 1) {
+    ERR_print_errors_fp(stderr);
+    goto cleanup;
+  }
+  if (EVP_VerifyUpdate(ctx, i, ilen) != 1) {
+    ERR_print_errors_fp(stderr);
+    goto cleanup;
+  }
+  if ((ret = EVP_VerifyFinal(ctx, s, slen, key)) < 0)
+    ERR_print_errors_fp(stderr);
+
+  cleanup:
+
+  EVP_PKEY_free(key);
+  EVP_MD_CTX_free(ctx);
+  return (ret == 1) ? true : false;
 }

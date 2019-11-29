@@ -330,8 +330,6 @@ void free_node(command_t *node) {
 to the server */
 
 
-
-
 /* function takes as input a packet and parses it into the client_parsed_t struct */
 client_parsed_t *parse_client_input(packet_t *p) {
   int ret;
@@ -357,7 +355,7 @@ client_parsed_t *parse_client_input(packet_t *p) {
   parsed->id = p->header->pckt_id;
   /* sets the nodes of the parsed struct to null depending on packet id
   so that the parsed struct can always be freed without error (other than
-  double freeing)*/
+  double freeing) */
   initialize_client_parsed(parsed);
 
   switch (parsed->id) {
@@ -374,6 +372,7 @@ client_parsed_t *parse_client_input(packet_t *p) {
     case C_MSG_PUBMSG:
       break;
     case C_MSG_USERS:
+      ret = -1;
       break;
     case C_META_PUBKEY_RQST:
       break;
@@ -427,7 +426,7 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
   if (parsed->reg_packet.iv == NULL)
     return -1;
 
-  /* traverses there payload with temporary pointer tmp. It copies th memory from payload into
+  /* traverses the payload with temporary pointer tmp. It copies the memory from payload into
   the respective variables in the parsed struct */
   memcpy(parsed->reg_packet.username, tmp, USERNAME_MAX);
   tmp += USERNAME_MAX;
@@ -502,6 +501,27 @@ int parse_client_login(packet_t *packet, client_parsed_t *parsed) {
   parsed->log_packet.username[USERNAME_MAX] = '\0';
   memcpy(parsed->log_packet.hash_password, tmp, SHA256_DIGEST_LENGTH);
   parsed->log_packet.hash_password[SHA256_DIGEST_LENGTH] = '\0';
+
+  return 1;
+}
+
+/* parses a /users request from the client, ensuring that the payload is correct etc. */
+int parse_client_users(packet_t *packet, client_parsed_t *parsed) {
+  char msg[USERS_MSG_SIZE+1];
+
+  if (!is_packet_legal(packet) || parsed == NULL ||
+      parsed->id != C_MSG_USERS)
+    return -1;
+
+  if (packet->header->pckt_sz != USERS_MSG_SIZE)
+    return -1;
+
+  /* compares the expected payload message (constant) with the one provided
+  in the packet */
+  memcpy(msg, packet->payload, USERS_MSG_SIZE);
+  msg[USERS_MSG_SIZE] = '\0';
+  if (strncmp(msg, USERS_MSG_PAYLOAD, USERS_MSG_SIZE) != 0)
+    return -1;
 
   return 1;
 }

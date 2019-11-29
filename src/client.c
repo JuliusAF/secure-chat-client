@@ -48,7 +48,7 @@ int main(int argc, const char* argv[]) {
 	port = (unsigned short) atoi(argv[2]);
 	socketfd = client_connect(argv[1], port);
 
-	const char cacertpath[] = "ttpkeys/ca-cert.pem";
+	const char cacertpath[] = "clientkeys/ca-cert.pem";
 	SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
 	SSL_CTX_load_verify_locations(ctx, cacertpath, NULL);
   SSL *ssl = SSL_new(ctx);
@@ -122,12 +122,10 @@ int main(int argc, const char* argv[]) {
 				free(server_output);
 				break;
 			}
-			printf("reached packet unpacking\n");
 			packet = unpack_packet(server_output, bytes_read);
-			printf("packet id: %d\n", packet->header->pckt_id);
 			if (packet == NULL)
 				goto cleanup;
-			printf("reached packet parsing\n");
+
 			parsed = parse_server_input(packet);
 			if (parsed == NULL)
 				goto cleanup;

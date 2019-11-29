@@ -11,7 +11,6 @@
 #include "client_utilities.h"
 #include "client_network.h"
 
-
 /* Initializes the struct that holds the information of the user
 logged into the current instance of the client application*/
 user_t *initialize_user_info(SSL *ssl, int connfd) {
@@ -120,7 +119,54 @@ int create_formatted_msg(char *dest, command_t *n, user_t *u) {
 	return 1;
 }
 
-/* this function handles the user input dependent of how it was parsed.
+/* signs a packet sent from client to server. This only works if the user is logged
+in and has a proper private key. Signing a packet in this case refers to
+signing the hash of the payload of the packet and storing that signature, as well as the
+signature length, in the packet header
+Only commands that require the user be logged in are signed. This means the /users
+command, as well as a public or pivate message will be signed. A login or register
+request will no be signed */
+void sign_client_packet(packet_t *p, user_t *u) {
+	int ret, privlen;
+	char *privkey;
+	unsigned char *hash = NULL;
+	BIO *bio;
+	EVP_PKEY *key;
+
+	if (!is_packet_legal(p) || u == NULL ||
+			!u->is_logged || !is_keypair_legal(u->rsa_keys))
+		return;
+
+	/* it is the hash of the payload that is signed. As such, the payload is hashed
+	here */
+	hash = hash_input( (char *) p->payload, p->header->pckt_sz);
+	if (hash == NULL)
+		return;
+
+	privlen = u->rsa_keys->privlen;
+	privkey = u->rsa_keys->privkey;
+
+	bio = BIO_new_mem_buf(privkey, privlen);
+	if (bio == NULL)
+		goto cleanup;
+
+	key = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+	BIO_free(bio);
+
+	ret = rsa_sign_sha256(key, p->header->sig, hash, SHA256_DIGEST_LENGTH);
+	if (ret == 0) {
+		memset(p->header->sig, '\0', MAX_SIG_SZ);
+	}
+	else
+		p->header->siglen = ret;
+
+
+	cleanup:
+
+	free(hash);
+}
+
+/* this function handles the user input dependent on how it was parsed.
 From this function, the packets for each command are created and sent
 to the server*/
 void handle_user_input(command_t *n, user_t *u, request_t *r) {
@@ -147,10 +193,7 @@ void handle_user_input(command_t *n, user_t *u, request_t *r) {
 			}
       break;
     case COMMAND_USERS:
-			if (!u->is_logged) {
-				print_error("user is not currently logged in");
-				break;
-			}
+			handle_user_users(n, u);
       break;
     case COMMAND_EXIT:
       break;
@@ -235,7 +278,7 @@ void handle_user_login(command_t *node, user_t *user, request_t *request) {
 
 	packet = gen_c_login_packet(node);
 	if (packet == NULL)
-	return;
+		return;
 
 	/* if there were no errors, the register request was successfully sent to
 	the server */
@@ -245,7 +288,37 @@ void handle_user_login(command_t *node, user_t *user, request_t *request) {
 	}
 	else
 		request->is_request_active = true;
+
+}
+
+/* handles a /users command from user input. This function also signs the
+packet */
+void handle_user_users(command_t *node, user_t *user) {
+	int ret;
+	packet_t *packet;
+
+	if (node == NULL || user == NULL ||
+			node->command != COMMAND_USERS)
+		return;
+
+	if (!user->is_logged) {
+		print_error("user is not currently logged in");
+		return;
 	}
+
+	packet = gen_c_users_packet(node);
+	if (packet == NULL)
+		return;
+
+	sign_client_packet(packet, user);
+	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
+	if (ret < 1)	{
+		fprintf(stderr, "failed to send user /users packet\n");
+	}
+}
+
+
+
 
 /* prints a custom error message*/
 void print_error(char *s) {
@@ -261,8 +334,6 @@ data obtained from the server if necessary and printing messages */
 /* takes as input client side meta data and the parsed input from the server
 socket and acts on the information accordingly */
 void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
-	printf("reached handle server input\n");
-	printf("parse id now: %d\n", p->id);
 	switch (p->id) {
     case S_MSG_PUBMSG:
       break;
@@ -312,8 +383,6 @@ void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
 		return;
 	}
 
-	printf("parse id later: %d\n", p->id);
-
 	iv = p->user_details.iv;
 	encrypt_sz = p->user_details.encrypt_sz;
 	encrypted_keys = p->user_details.encrypted_keys;
@@ -331,6 +400,7 @@ void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
 	if (keys == NULL)
 		return;
 
+	/* copies the necessary fields into the user info struct */
 	memcpy(u->username, r->username, USERNAME_MAX);
 	u->username[USERNAME_MAX] = '\0';
 	memcpy(u->masterkey, r->masterkey, MASTER_KEY_LEN);
@@ -345,6 +415,8 @@ void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
 		printf("registration succeeded\n");
 }
 
+/* handles any packet that indicates that an attempt to register or login
+has failed. If this is the case, the active request is cleared */
 void handle_server_log_fail(server_parsed_t *p, user_t *u, request_t *r) {
 	if (!is_server_parsed_legal(p) ||
 			u == NULL || r == NULL ||

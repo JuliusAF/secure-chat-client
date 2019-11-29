@@ -129,13 +129,10 @@ unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypai
   }
 
   hashed_pass = hash_password(n->acc_details.password, strlen(n->acc_details.password), NULL, 0);
-  printf("password from user: %ld\n", strlen(n->acc_details.password));
   if (hashed_pass == NULL) {
     error = true;
     goto cleanup;
   }
-  printf("hash password on client side:\n");
-  print_hex(hashed_pass, SHA256_DIGEST_LENGTH);
 
   payload_sz = USERNAME_MAX + SHA256_DIGEST_LENGTH + sizeof(int) + k->publen +
                IV_SIZE + sizeof(int) + encrypted_sz;
@@ -178,25 +175,16 @@ unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypai
 be passed to a write function for transmission over the socket */
 packet_t *gen_c_register_packet(command_t *n, request_t *r) {
   int payload_sz;
-  packet_hdr_t *header;
-  unsigned char *payload;
-  keypair_t *keys;
+  packet_hdr_t *header = NULL;
+  unsigned char *payload = NULL;
+  keypair_t *keys = NULL;
 
   if (n == NULL || r == NULL)
     return NULL;
 
-  header = (packet_hdr_t *) safe_malloc(sizeof(packet_hdr_t));
-  if (header == NULL)
-    return NULL;
-
-  header->pckt_id = C_MSG_REGISTER;
-  header->siglen = 0;
-  memset(header->sig, '\0', MAX_SIG_SZ);
-
   keys = create_rsa_pair();
   if (!is_keypair_legal(keys)) {
     free_keypair(keys);
-    free(header);
     return NULL;
   }
 
@@ -205,10 +193,15 @@ packet_t *gen_c_register_packet(command_t *n, request_t *r) {
   payload = serialize_register(n, r->masterkey, keys, &payload_sz);
   if (payload == NULL && payload_sz < 1) {
     free_keypair(keys);
-    free(header);
     return NULL;
   }
-  header->pckt_sz = payload_sz;
+
+  header = initialize_header(C_MSG_REGISTER, payload_sz);
+  if (header == NULL) {
+    free_keypair(keys);
+    free(payload);
+    return NULL;
+  }
 
   free_keypair(keys);
   return pack_packet(header, payload);
@@ -243,6 +236,9 @@ unsigned char *serialize_login(command_t *n) {
   return payload;
 }
 
+/* creates the actual packet for a login request. The payload of the packet
+is created in serialize_login(), which turns the necessary fields into a byte
+array */
 packet_t *gen_c_login_packet(command_t *n) {
   packet_hdr_t *header;
   unsigned char *payload;
@@ -250,20 +246,41 @@ packet_t *gen_c_login_packet(command_t *n) {
   if (n == NULL)
     return NULL;
 
-  header = (packet_hdr_t *) safe_malloc(sizeof(packet_hdr_t));
+  header = initialize_header(C_MSG_LOGIN, LOGIN_REQUEST_SIZE);
   if (header == NULL)
     return NULL;
-
-  header->pckt_id = C_MSG_LOGIN;
-  header->pckt_sz = LOGIN_REQUEST_SIZE;
-  header->siglen = 0;
-  memset(header->sig, '\0', MAX_SIG_SZ);
 
   payload = serialize_login(n);
   if (payload == NULL) {
     free(header);
     return NULL;
   }
+
+  return pack_packet(header, payload);
+}
+
+/* creates a packet for the users command. The payload contents and size is
+constant, and utilized solely to sign the packet from the server side */
+packet_t *gen_c_users_packet(command_t *n) {
+  packet_hdr_t *header = NULL;
+  unsigned char *payload = NULL;
+  char tmp[USERS_MSG_SIZE+1];
+
+  if (n == NULL || n->command != COMMAND_USERS)
+    return NULL;
+
+  payload = (unsigned char *) safe_malloc(sizeof(unsigned char) * USERS_MSG_SIZE);
+  if (payload == NULL)
+    return NULL;
+
+  header = initialize_header(C_MSG_USERS, USERS_MSG_SIZE);
+  if (header == NULL) {
+    free(payload);
+    return NULL;
+  }
+
+  strncpy(tmp, USERS_MSG_PAYLOAD, USERS_MSG_SIZE);
+  memcpy(payload, tmp, USERS_MSG_SIZE);
 
   return pack_packet(header, payload);
 }

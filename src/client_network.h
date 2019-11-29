@@ -18,4 +18,7 @@ packet to send to the server */
 unsigned char *serialize_login(command_t *n);
 packet_t *gen_c_login_packet(command_t *n);
 
+/* functions to handle a users request */
+packet_t *gen_c_users_packet(command_t *n);
+
 #endif

@@ -79,7 +79,8 @@ def run_make(dir, target):
   if result.stderr:
     cmdresult.report(False)
     sys.stderr.write("warning: make gave warning(s)\n")
-    print_stderr("make", "stderr", result.stderr)
+    stderrtext = result.stderr.decode(locale.getpreferredencoding())
+    procman.print_std("make", "stderr", stderrtext)
     warnings = True
     return
 
@@ -109,7 +110,6 @@ def callback_check_pubmsg_send(pm):
   # executed with one client
   pm.sendinput(1, "/login erik hunter2\n")
   pm.sendinput(1, "pubmsg1\n")
-  time.sleep(1)
   pm.waitall()
   pm.matchoutput(1, [REGEXP_PUBMSG1])
 
@@ -123,7 +123,6 @@ def callback_check_pubmsg_recv(pm):
   # executed with one client
   pm.sendinput(1, "/login erik hunter2\n")
   pm.sendinput(2, "/register user2 iloveyou\n")
-  time.sleep(1)
   pm.sendinput(1, "pubmsg2\n")
   pm.waitall()
   pm.matchoutput(1, [REGEXP_PUBMSG1, REGEXP_PUBMSG2])
@@ -188,11 +187,14 @@ def check_filediff(dir, filesdiff, isnew):
   pathchatdb = os.path.join(dir, "chat.db")
   pathclientkeys = os.path.join(dir, "clientkeys")
   pathserverkeys = os.path.join(dir, "serverkeys")
+  pathttpkeys = os.path.join(dir, "ttpkeys")
   pathtesttmp = os.path.join(dir, "test-tmp")
   for path, mtime in sorted(filesdiff):
     if path == pathchatdb: continue
+    if path.startswith(pathchatdb + "-"): continue
     if path.startswith(pathclientkeys): continue
     if path.startswith(pathserverkeys): continue
+    if path.startswith(pathttpkeys): continue
     if path.startswith(pathtesttmp): continue
     
     sys.stderr.write("warning: file %s has been %s or modified by the program\n" % (path, "created" if isnew else "deleted"))

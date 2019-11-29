@@ -6,7 +6,6 @@
 #include "parser.h"
 #include "cryptography.h"
 
-
 /* defines fixed size of header*/
 #define HEADER_SIZE (sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint32_t) + MAX_SIG_SZ)
 /* The limit here is reasonably higher than what is needed, but
@@ -25,6 +24,11 @@ is defined to ensure a benchmark for packet size */
 #define C_MSG_USERS 1006
 
 #define C_META_PUBKEY_RQST 1101
+
+/* defines the payload for a user request. Used to create signature and is
+a constant as a user command requires no information from the client */
+#define USERS_MSG_PAYLOAD "client users request"
+#define USERS_MSG_SIZE 20
 
 /* defines the id codes for packets from server to clients*/
 #define S_MSG_PUBMSG 2001
@@ -56,6 +60,7 @@ int accept_connection(int serverfd);
 int send_packet_over_socket(SSL *ssl, int fd, packet_t *p);
 int read_packet_from_socket(SSL *ssl, int fd, unsigned char *buffer);
 bool is_packet_legal(packet_t *p);
+packet_hdr_t *initialize_header(uint16_t id, uint32_t sz);
 packet_t *pack_packet(packet_hdr_t *header, unsigned char *payload);
 unsigned char *serialize_packet(packet_t *p);
 packet_t *unpack_packet(unsigned char *buffer, int size);
