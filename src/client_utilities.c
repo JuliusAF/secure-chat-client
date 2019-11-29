@@ -7,9 +7,10 @@
 #include "cryptography.h"
 #include "network.h"
 #include "safe_wrappers.h"
-#include "parser.h"
 #include "client_utilities.h"
 #include "client_network.h"
+#include "parse_user_input.h"
+#include "parse_server_input.h"
 
 /* Initializes the struct that holds the information of the user
 logged into the current instance of the client application*/

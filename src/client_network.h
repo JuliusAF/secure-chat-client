@@ -2,9 +2,9 @@
 #define CLIENT_NETWORK_H
 
 #include "network.h"
-#include "parser.h"
 #include "cryptography.h"
 #include "client_utilities.h"
+#include "parse_user_input.h"
 
 /* functions to handle the network aspect of assimilating register packet
 to send it over to the server */

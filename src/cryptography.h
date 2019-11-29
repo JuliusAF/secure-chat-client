@@ -4,9 +4,7 @@
 #include <stdbool.h>
 #include <openssl/sha.h>
 #include <openssl/evp.h>
-
-/* maximum size for rsa signature*/
-#define MAX_SIG_SZ 256
+#include "parse_user_input.h"
 
 /* definitions for creation of client master key*/
 #define MASTER_KEY_LEN 16

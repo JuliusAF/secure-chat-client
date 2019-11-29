@@ -11,7 +11,6 @@
 #include <openssl/pem.h>
 #include "safe_wrappers.h"
 #include "cryptography.h"
-#include "parser.h"
 
 /* creates and returns a salt based on the size given*/
 unsigned char *create_rand_salt(unsigned int size) {

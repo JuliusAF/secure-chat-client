@@ -6,10 +6,9 @@
 #include <time.h>
 #include <openssl/ssl.h>
 #include "cryptography.h"
-#include "ssl-nonblock.h"
 #include "server_utilities.h"
 #include "database.h"
-#include "parser.h"
+#include "parse_client_input.h"
 #include "safe_wrappers.h"
 
 /* a lot of these functions are bloated with functionality that I will refactor
@@ -432,10 +431,10 @@ int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err
   return ret;
 }
 
-
+/*
 int handle_db_privmsg(command_t *node, client_t *client_info);
 
-/* This function inputs a public message into the database.*/
+This function inputs a public message into the database.
 int handle_db_pubmsg(command_t *node, client_t *client_info) {
   char msg[MESSAGE_MAX+1], *sql, name[USERNAME_MAX+1];
   int rc, step;
@@ -447,7 +446,7 @@ int handle_db_pubmsg(command_t *node, client_t *client_info) {
   if (db == NULL)
     return -1;
 
-  /* similar to the above occurences, checks if a user is logged in. Will be abstracted */
+  similar to the above occurences, checks if a user is logged in. Will be abstracted
 
   if (!client_info->is_logged) {
     strcpy(msg, "error: you must be logged in to send a public message");
@@ -486,7 +485,7 @@ int handle_db_pubmsg(command_t *node, client_t *client_info) {
   return COMMAND_PUBMSG;
 }
 
-int handle_db_users(client_t *client_info);
+int handle_db_users(client_t *client_info); */
 
 int handle_db_exit(client_t *client_info) {
   char *sql, name[USERNAME_MAX+1];
@@ -499,7 +498,7 @@ int handle_db_exit(client_t *client_info) {
     return -1;
 
   /* if the worker process does not have a logged in client then nothing needs to
-  be done. The function returns successfully*/
+  be done. The function returns successfully */
   if (!client_info->is_logged) {
     sqlite3_close(db);
     return COMMAND_EXIT;
@@ -537,6 +536,7 @@ messages (into which these queries are put into),
 which are then converted into packets elsewhere and sent
 over the network. Because I have not developed the network aspect I
 am sending them here*/
+/*
 int fetch_db_message(client_t *client_info) {
   char *sql, sender[USERNAME_MAX+1], conc_msg[500] = {0};
   msg_components *components;
@@ -557,8 +557,6 @@ int fetch_db_message(client_t *client_info) {
     return 1;
   }
 
-  /* This query searches for all entries that occurred after
-  the client has last been updated with this information*/
   sql = "SELECT * FROM Messages WHERE Timestamp > ?1 AND" \
         "(Sender = ?2 OR Recipient = ?2" \
         "OR Recipient IS NULL)";
@@ -592,7 +590,7 @@ int fetch_db_message(client_t *client_info) {
   sqlite3_finalize(res);
   sqlite3_close(db);
   return 1;
-}
+} */
 
 /* places a date string (based on the time t provided) into the provided array*/
 int create_date_string(char *date, time_t t) {

@@ -5,9 +5,9 @@
 #include <sys/select.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
-#include "safe_wrappers.h"
 #include "ssl-nonblock.h"
-#include "parser.h"
+#include "parse_user_input.h"
+#include "parse_server_input.h"
 #include "network.h"
 #include "client_utilities.h"
 #include "cryptography.h"

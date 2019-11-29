@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include <sqlite3.h>
 #include <time.h>
-#include "parser.h"
 #include "network.h"
 #include "database.h"
 #include "server_utilities.h"

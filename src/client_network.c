@@ -6,9 +6,9 @@
 #include "safe_wrappers.h"
 #include "cryptography.h"
 #include "network.h"
-#include "parser.h"
 #include "client_network.h"
 #include "client_utilities.h"
+#include "parse_user_input.h"
 
 /* The following four functions are used during register requests from users,
 as well as when the server returns a successful login attempt, thereby sending

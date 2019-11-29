@@ -1,21 +1,24 @@
-SERVER_SOURCES = src/server.c src/parser.c \
+SERVER_SOURCES = src/server.c src/parse_client_input.c \
 								 src/safe_wrappers.c src/network.c \
 								 src/database.c src/server_utilities.c \
 								 src/ssl-nonblock.c src/cryptography.c \
-								 src/server_network.c
-SERVER_HEADERS = src/parser.h src/safe_wrappers.h \
-								 src/network.h src/database.h \
+								 src/server_network.c src/parse_user_input.c
+
+SERVER_HEADERS = src/safe_wrappers.h src/parse_client_input.h \
+								 src/network.h src/database.h src/parse_user_input.h \
 								 src/server_utilities.h src/ssl-nonblock.h \
 								 src/cryptography.h src/server_network.h
 
-CLIENT_SOURCES = src/client.c src/parser.c \
+CLIENT_SOURCES = src/client.c src/parse_server_input.c\
 								 src/safe_wrappers.c src/network.c \
 								 src/client_utilities.c src/ssl-nonblock.c \
-								 src/cryptography.c src/client_network.c
-CLIENT_HEADERS = src/parser.h src/safe_wrappers.h \
+								 src/cryptography.c src/client_network.c \
+								 src/parse_user_input.c
+
+CLIENT_HEADERS = src/safe_wrappers.h src/parse_client_input.h\
 								 src/network.h src/client_utilities.h \
 								 src/ssl-nonblock.h src/cryptography.h \
-								 src/client_network.h
+								 src/client_network.h src/parse_user_input.h
 
 TARGETS = server client
 KEYS = ca-key.pem ca-cert.pem server-key.pem server-csr.pem server-ca-cert.pem

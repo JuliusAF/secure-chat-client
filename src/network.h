@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 #include <openssl/ssl.h>
-#include "parser.h"
 #include "cryptography.h"
 
 /* defines fixed size of header*/
@@ -40,6 +39,9 @@ a constant as a user command requires no information from the client */
 #define S_META_LOGIN_FAIL 2102
 #define S_META_REGISTER_PASS 2103
 #define S_META_REGISTER_FAIL 2104
+
+/* maximum size for rsa signature*/
+#define MAX_SIG_SZ 256
 
 typedef struct packet_header {
   uint32_t pckt_sz;

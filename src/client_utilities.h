@@ -5,7 +5,8 @@
 #include <openssl/ssl.h>
 #include "cryptography.h"
 #include "network.h"
-#include "parser.h"
+#include "parse_user_input.h"
+#include "parse_server_input.h"
 
 #define DATE_FORMAT "%Y-%m-%d %H:%M:%S"
 

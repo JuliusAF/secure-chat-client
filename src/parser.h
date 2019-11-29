@@ -93,6 +93,7 @@ typedef struct parsed_server_input {
 typedef struct packet_to_send packet_t;
 
 /* functions for parsing user input on the client side */
+
 void print_hex(unsigned char *hex, int len);
 char *read_input(int fd);
 char *trim_front_whitespace(char *input);
@@ -110,6 +111,7 @@ bool is_node_legal(command_t *node);
 void free_node(command_t *node);
 
 /* functions for parsing packets received server side from the client */
+
 client_parsed_t *parse_client_input(packet_t *p);
 int parse_client_register(packet_t *packet, client_parsed_t *parsed);
 int parse_client_login(packet_t *packet, client_parsed_t *parsed);

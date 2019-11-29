@@ -2,18 +2,16 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/select.h>
-#include <stdbool.h>
 #include <sqlite3.h>
 #include <time.h>
 #include <openssl/err.h>
-#include <openssl/ssl.h>
 #include "ssl-nonblock.h"
-#include "parser.h"
 #include "network.h"
 #include "server_utilities.h"
 #include "server_network.h"
 #include "safe_wrappers.h"
 #include "database.h"
+#include "parse_client_input.h"
 
 /* initializes all variables in a client_t struct*/
 static client_t *initialize_client_info(int connfd, SSL *ssl) {
@@ -191,7 +189,6 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
     so. */
 		if (FD_ISSET(from_parent[0], &selectfds)) {
 			read(from_parent[0], &pipe_input, S_MSG_LEN);
-      fetch_db_message(client_info);
 		}
 	}
 

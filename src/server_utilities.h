@@ -2,9 +2,9 @@
 #define SERVER_UTILITIES_H
 
 #include <stdbool.h>
-#include <sqlite3.h>
 #include <openssl/ssl.h>
-#include "parser.h"
+#include "parse_client_input.h"
+#include "parse_user_input.h"
 
 #define MAX_CLIENTS 30
 #define DATE_FORMAT "%Y-%m-%d %H:%M:%S"

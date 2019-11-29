@@ -1,6 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "safe_wrappers.h"
 
 void *safe_malloc(size_t s) {

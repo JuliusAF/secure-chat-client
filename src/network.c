@@ -9,7 +9,6 @@
 #include <openssl/ssl.h>
 #include "ssl-nonblock.h"
 #include "safe_wrappers.h"
-#include "parser.h"
 #include "network.h"
 
 int create_server_socket(unsigned short port) {
