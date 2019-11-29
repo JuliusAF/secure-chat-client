@@ -45,6 +45,7 @@ client_parsed_t *parse_client_input(packet_t *p) {
     case C_MSG_PRIVMSG:
       break;
     case C_MSG_PUBMSG:
+      ret = parse_client_pubmsg(p, parsed);
       break;
     case C_MSG_USERS:
       ret = parse_client_users(p, parsed);
@@ -178,12 +179,14 @@ int parse_client_login(packet_t *packet, client_parsed_t *parsed) {
   return 1;
 }
 
-/* parses a /users request from the client, ensuring that the payload is correct etc. */
+/* parses a /users request from the client, ensuring that the payload is correct etc.
+Returns:
+1 on success
+-1 on failure */
 int parse_client_users(packet_t *packet, client_parsed_t *parsed) {
   char msg[USERS_MSG_SIZE+1];
 
-  if (!is_packet_legal(packet) || parsed == NULL ||
-      parsed->id != C_MSG_USERS)
+  if (!is_packet_legal(packet) || parsed == NULL)
     return -1;
 
   if (packet->header->pckt_sz != USERS_MSG_SIZE)
@@ -195,6 +198,52 @@ int parse_client_users(packet_t *packet, client_parsed_t *parsed) {
   msg[USERS_MSG_SIZE] = '\0';
   if (strncmp(msg, USERS_MSG_PAYLOAD, USERS_MSG_SIZE) != 0)
     return -1;
+
+  return 1;
+}
+
+/* parses a public message packet. The public key that is provided with the message
+is ignored as a copy already exists in the database
+Returns:
+1 on success
+-1 on failure  */
+int parse_client_pubmsg(packet_t *packet, client_parsed_t *parsed) {
+  unsigned int publen, msglen, total;
+  unsigned char *tmp, *tmpend;
+
+  if (!is_packet_legal(packet) || parsed == NULL)
+    return -1;
+
+  tmp = packet->payload;
+  total = packet->header->pckt_sz;
+  tmpend = tmp + total;
+
+  memcpy(&publen, tmp, sizeof(unsigned int));
+  tmp += (sizeof(unsigned int) + publen);
+  /* check if the length of public key and size of length exceeds the pointer limit */
+  if (tmp > tmpend)
+    return -1;
+
+  memcpy(&msglen, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  /* check if current pointer plus the length of the message makes it exceed the limit */
+  if ((tmp + msglen) > tmpend)
+    return -1;
+
+  parsed->pubmsg_packet.sig = safe_malloc(sizeof(unsigned char) * packet->header->siglen+1);
+  parsed->pubmsg_packet.message = safe_malloc(sizeof(char) * msglen+1);
+  if (parsed->pubmsg_packet.sig == NULL ||
+      parsed->pubmsg_packet.message == NULL)
+    return -1;
+
+  /* copies the message from payload to parsed struct and the signature too. The signature is
+  copied from the header */
+  memcpy(parsed->pubmsg_packet.message, tmp, msglen);
+  parsed->pubmsg_packet.message[msglen] = '\0';
+  memcpy(parsed->pubmsg_packet.sig, packet->header->sig, packet->header->siglen);
+  parsed->pubmsg_packet.sig[packet->header->siglen] = '\0';
+  parsed->pubmsg_packet.siglen = packet->header->siglen;
+  parsed->pubmsg_packet.msg_sz = msglen;
 
   return 1;
 }
@@ -223,6 +272,8 @@ void initialize_client_parsed(client_parsed_t *p) {
     case C_MSG_PRIVMSG:
       break;
     case C_MSG_PUBMSG:
+      p->pubmsg_packet.sig = NULL;
+      p->pubmsg_packet.message = NULL;
       break;
     case C_MSG_USERS:
       /* nothing to initialize */
@@ -260,6 +311,9 @@ bool is_client_parsed_legal(client_parsed_t *p) {
     case C_MSG_PRIVMSG:
       break;
     case C_MSG_PUBMSG:
+      if (p->pubmsg_packet.sig == NULL ||
+          p->pubmsg_packet.message == NULL)
+        return false;
       break;
     case C_MSG_USERS:
       /* nothing to check in this instance */
@@ -295,6 +349,8 @@ void free_client_parsed(client_parsed_t *p) {
     case C_MSG_PRIVMSG:
       break;
     case C_MSG_PUBMSG:
+      free(p->pubmsg_packet.sig);
+      free(p->pubmsg_packet.message);
       break;
     case C_MSG_USERS:
       /* nothing to free in this instance */

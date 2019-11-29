@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <time.h>
 #include "safe_wrappers.h"
 #include "cryptography.h"
 #include "network.h"
@@ -283,4 +284,119 @@ packet_t *gen_c_users_packet(command_t *n) {
   memcpy(payload, tmp, USERS_MSG_SIZE);
 
   return pack_packet(header, payload);
+}
+
+/* a public message packet's payload is made up of 3 fields. The first is
+the size of the public key, the second is the public key, the third is
+the size of the message, and the fourth is the actual message.
+The reason the public key is added is so that when the
+packet is signed, the signature is a function of the public key, ensuring
+that it's the correct one. This is done because every client that receives
+this message must verify the signature with the public key anyway, so it
+may as well be a necessity in the packet for verification purposes */
+unsigned char *serialize_pubmsg(char *message, user_t *u, unsigned int payload_sz) {
+  unsigned int s;
+  unsigned char *payload = NULL, *tmp;
+
+  if (message == NULL || u == NULL || strlen(message) == 0)
+    return NULL;
+
+  payload = safe_malloc(sizeof(unsigned char) * payload_sz);
+  if (payload == NULL)
+    return NULL;
+
+  tmp = payload;
+  s = strlen(message);
+
+  memcpy(tmp, &u->rsa_keys->publen, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  memcpy(tmp, u->rsa_keys->pubkey, u->rsa_keys->publen);
+  tmp += u->rsa_keys->publen;
+  memcpy(tmp, &s, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  memcpy(tmp, message, s);
+
+  return payload;
+}
+
+/* creates and returns a packet for a public message */
+packet_t *gen_c_pubmsg_packet(command_t *n, user_t *u) {
+  int ret;
+  unsigned int payload_sz;
+  unsigned char *payload = NULL;
+  char message[500];
+  packet_hdr_t *header = NULL;
+
+  if (n == NULL || u == NULL || !is_keypair_legal(u->rsa_keys))
+    return NULL;
+
+  ret = create_formatted_msg(message, n, u);
+  if (ret < 1)
+    return NULL;
+
+  printf("concat message: %s\n", message);
+
+  payload_sz = sizeof(int) + u->rsa_keys->publen + sizeof(int) + strlen(message);
+  payload = serialize_pubmsg(message, u, payload_sz);
+  if (payload == NULL)
+    return NULL;
+
+  header = initialize_header(C_MSG_PUBMSG, payload_sz);
+  if (header == NULL) {
+    free(payload);
+    return NULL;
+  }
+
+  return pack_packet(header, payload);
+}
+
+/* creates a date string from a given time_t struct */
+int create_date_string(char *date, time_t t) {
+	struct tm *tmp;
+
+	if (t < 0) {
+		perror("time(null) failed");
+		return -1;
+	}
+  /* Code taken from example supplied by the linux man page on strftime*/
+  tmp = localtime(&t);
+
+  if (tmp == NULL) {
+    perror("localtime");
+    return -1;
+  }
+  if (strftime(date, 60, DATE_FORMAT, tmp) == 0) {
+    fprintf(stderr, "strftime returned 0");
+    return -1;
+  }
+  return 1;
+}
+
+/* Takes as input a buffer, a parsed command and the user info. If the command is a private
+or public message, it concatenates the fields for the corresponding message
+into one string and stores it in the buffer.*/
+int create_formatted_msg(char *dest, command_t *n, user_t *u) {
+	char date[60];
+	int ret;
+
+	ret = create_date_string(date, time(NULL));
+	if (ret < 1 || strlen(date) > 59)
+		return -1;
+
+	strcpy(dest, "");
+	strcpy(dest, date);
+	strncat(dest, " ", 1);
+	strncat(dest, u->username, USERNAME_MAX+1);
+	if(n->command == COMMAND_PRIVMSG) {
+    strncat(dest, ": @", 3);
+    strncat(dest, n->privmsg.username, strlen(n->privmsg.username));
+    strncat(dest, " ", 1);
+		strncat(dest, n->privmsg.message, strlen(n->privmsg.message));
+  }
+  else {
+    strncat(dest, ": ", 2);
+		strncat(dest, n->message, strlen(n->message));
+  }
+
+	return 1;
 }

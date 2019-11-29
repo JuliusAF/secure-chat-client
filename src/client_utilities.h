@@ -34,13 +34,12 @@ int read_stdin(char *buffer, int size);
 
 /* these functions deal with input from the user through stdin and
 sending any necessary data to the server */
-int create_date_string(char *date, time_t t);
-int create_formatted_msg(char *msg, command_t *n, user_t *u);
 void sign_client_packet(packet_t *p, user_t *u);
 void handle_user_input(command_t *n, user_t *u, request_t *r);
 void handle_user_register(command_t *node, user_t *user, request_t *request);
 void handle_user_login(command_t *node, user_t *user, request_t *request);
 void handle_user_users(command_t *node, user_t *user);
+void handle_user_pubmsg(command_t *node, user_t *user);
 void print_error(char *s);
 
 /* the functions handle packets coming from the server over the socket */

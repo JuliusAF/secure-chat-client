@@ -70,7 +70,8 @@ int initialize_database() {
   sql = "CREATE TABLE IF NOT EXISTS MESSAGES(" \
         "SENDER               TEXT  NOT NULL," \
         "RECIPIENT            TEXT," \
-        "MESSAGE              BLOB  NOT NULL," \
+        "MESSAGE              TEXT  NOT NULL," \
+        "SIGNATURE            BLOB  NOT NULL," \
         "IV                   BLOB," \
         "S_SYMKEY             BLOB," \
         "R_SYMKEY             BLOB );";
@@ -419,59 +420,51 @@ int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err
   return ret;
 }
 
-/*
-int handle_db_privmsg(command_t *node, client_t *client_info);
+/* inserts a public message into the database. The fields that need to be updated
+are the username, the message and the signature length. Every other field is NULL
+Returns:
+1 on success
+0 on database failure */
+int handle_db_pubmsg(client_parsed_t *parsed, client_t *client_info) {
+  char *sql;
+  int ret = 0, rc, step;
+  sqlite3_stmt *res = NULL;
+  sqlite3 *db = NULL;
 
-This function inputs a public message into the database.
-int handle_db_pubmsg(command_t *node, client_t *client_info) {
-  char msg[MESSAGE_MAX+1], *sql, name[USERNAME_MAX+1];
-  int rc, step;
-  sqlite3_stmt *res;
-  sqlite3 *db;
-  time_t t;
+  if(!is_client_parsed_legal(parsed) || client_info == NULL)
+    goto cleanup;
 
   db = open_database();
   if (db == NULL)
-    return -1;
+    goto cleanup;
 
-  similar to the above occurences, checks if a user is logged in. Will be abstracted
-
-  if (!client_info->is_logged) {
-    strcpy(msg, "error: you must be logged in to send a public message");
-    ssl_block_write(client_info->ssl, client_info->connfd, msg, strlen(msg)+1);
-    sqlite3_close(db);
-    return -1;
-  }
-
-  t = time(NULL);
-
-  sql = "INSERT INTO Messages VALUES(?1, ?2, NULL, ?3)";
+  sql = "INSERT INTO MESSAGES VALUES(?1, NULL, ?2, ?3, NULL, NULL, NULL)";
 
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK) {
-    strcpy(name, client_info->username);
-    strcpy(msg, node->message);
-    sqlite3_bind_int64(res, 1, t);
-    sqlite3_bind_text(res, 2, name, -1, SQLITE_STATIC);
-    sqlite3_bind_text(res, 3, msg, -1, SQLITE_STATIC);
+    sqlite3_bind_text(res, 1, client_info->username, -1, SQLITE_STATIC);
+    sqlite3_bind_text(res, 2, parsed->pubmsg_packet.message, parsed->pubmsg_packet.msg_sz, SQLITE_STATIC);
+    sqlite3_bind_blob(res, 3, parsed->pubmsg_packet.sig, parsed->pubmsg_packet.siglen, SQLITE_STATIC);
   }
   else {
     fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
-    sqlite3_close(db);
-    return -1;
+    goto cleanup;
   }
 
   step = sqlite3_step(res);
   if (step != SQLITE_DONE) {
     fprintf(stderr, "Failed to execute statement: %s \n", sqlite3_errmsg(db));
-    sqlite3_close(db);
-    return -1;
+    ret = 0;
+    goto cleanup;
   }
+
+  ret = 1;
+  cleanup:
 
   sqlite3_finalize(res);
   sqlite3_close(db);
-  return COMMAND_PUBMSG;
-} */
+  return ret;
+}
 
 int handle_db_exit(client_t *client_info) {
   char *sql, name[USERNAME_MAX+1];
@@ -618,7 +611,7 @@ char *fetch_db_users() {
 
   step = sqlite3_step(res);
   loop = 0;
-  while (step == SQLITE_ROW && loop < 30) {
+  while (step == SQLITE_ROW && loop < MAX_CLIENTS) {
     /* ensure the username copied is less than the possible max */
     if ((rc = sqlite3_column_bytes(res, 0)) <= USERNAME_MAX) {
       tmp = (char *) sqlite3_column_text(res, 0);

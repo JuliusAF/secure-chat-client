@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <time.h>
 #include "cryptography.h"
 #include "network.h"
 #include "safe_wrappers.h"
@@ -25,7 +24,7 @@ user_t *initialize_user_info(SSL *ssl, int connfd) {
 	user->is_logged = false;
 	user->ssl = ssl;
 	user->connfd = connfd;
-	strcpy(user->username, "");
+	memset(user->username, '\0', USERNAME_MAX+1);
 	memset(user->masterkey, '\0', MASTER_KEY_LEN+1);
 	user->rsa_keys = NULL;
 
@@ -39,7 +38,7 @@ request_t *initialize_request(void) {
 		return NULL;
 
 	r->is_request_active = false;
-	strcpy(r->username, "");
+	memset(r->username, '\0', USERNAME_MAX+1);
 	memset(r->masterkey, '\0', MASTER_KEY_LEN+1);
 
 	return r;
@@ -67,57 +66,6 @@ int read_stdin(char *buffer, int size) {
 
 	buffer[index] = '\0';
 	return bytes_read;
-}
-
-/* creates a date string from a given time_t struct */
-int create_date_string(char *date, time_t t) {
-	struct tm *tmp;
-
-	if (t < 0) {
-		perror("time(null) failed");
-		return -1;
-	}
-  /* Code taken from example supplied by the linux man page on strftime*/
-  tmp = localtime(&t);
-
-  if (tmp == NULL) {
-    perror("localtime");
-    return -1;
-  }
-  if (strftime(date, 60, DATE_FORMAT, tmp) == 0) {
-    fprintf(stderr, "strftime returned 0");
-    return -1;
-  }
-  return 1;
-}
-
-/* Takes as input a buffer, a parsed command and the user info. If the command is a private
-or public message, it concatenates the fields for the corresponding message
-into one string and stores it in the buffer.*/
-int create_formatted_msg(char *dest, command_t *n, user_t *u) {
-	char date[60];
-	int ret;
-
-	ret = create_date_string(date, time(NULL));
-	if (ret < 1 || strlen(date) > 59)
-		return -1;
-
-	strcpy(dest, "");
-	strcpy(dest, date);
-	strncat(dest, " ", 1);
-	strncat(dest, u->username, strlen(u->username));
-	if(n->command == COMMAND_PRIVMSG) {
-    strncat(dest, ": @", 3);
-    strncat(dest, n->privmsg.username, strlen(n->privmsg.username));
-    strncat(dest, " ", 1);
-		strncat(dest, n->privmsg.message, strlen(n->privmsg.message));
-  }
-  else {
-    strncat(dest, ": ", 2);
-		strncat(dest, n->message, strlen(n->message));
-  }
-
-	return 1;
 }
 
 /* signs a packet sent from client to server. This only works if the user is logged
@@ -188,10 +136,7 @@ void handle_user_input(command_t *n, user_t *u, request_t *r) {
 			}
       break;
     case COMMAND_PUBMSG:
-			if (!u->is_logged) {
-				print_error("you must be logged in to send a public message");
-				break;
-			}
+			handle_user_pubmsg(n, u);
       break;
     case COMMAND_USERS:
 			handle_user_users(n, u);
@@ -252,8 +197,8 @@ issues such as already being logged in. If all checks pass, the request struct
 is updated and a login packet is sent to the server */
 void handle_user_login(command_t *node, user_t *user, request_t *request) {
 	int ret;
-	unsigned char *masterkey;
-	packet_t *packet;
+	unsigned char *masterkey = NULL;
+	packet_t *packet = NULL;
 
 	if (node == NULL || user == NULL || request == NULL)
 		return;
@@ -296,7 +241,7 @@ void handle_user_login(command_t *node, user_t *user, request_t *request) {
 packet */
 void handle_user_users(command_t *node, user_t *user) {
 	int ret;
-	packet_t *packet;
+	packet_t *packet = NULL;
 
 	if (node == NULL || user == NULL ||
 			node->command != COMMAND_USERS)
@@ -319,12 +264,41 @@ void handle_user_users(command_t *node, user_t *user) {
 
 }
 
+/* This function handles the construction of a public message packet */
+void handle_user_pubmsg(command_t *node, user_t *user) {
+	int ret;
+	packet_t *packet = NULL;
+
+	if (node == NULL || user == NULL)
+		return;
+
+	if (!user->is_logged) {
+		print_error("you must be logged in to send a public message");
+		return;
+	}
+
+	packet = gen_c_pubmsg_packet(node, user);
+	if (packet == NULL)
+		return;
+
+	sign_client_packet(packet, user);
+	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
+	if (ret < 1)	{
+		fprintf(stderr, "failed to send user /users packet\n");
+	}
+
+}
+
 /* prints a custom error message*/
 void print_error(char *s) {
+	const char e[] = "error: ";
+
 	if (s == NULL)
 		return;
 
-	printf("error: %s\n", s);
+	write(1, e, strlen(e));
+	write(1, s, strlen(s));
+	write(1, "\n", 1);
 }
 
 /* these functions deal with input from the server. This includes storing
@@ -333,6 +307,9 @@ data obtained from the server if necessary and printing messages */
 /* takes as input client side meta data and the parsed input from the server
 socket and acts on the information accordingly */
 void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
+	if (!is_server_parsed_legal(p) || u == NULL || r == NULL)
+		return;
+
 	switch (p->id) {
     case S_MSG_PUBMSG:
       break;
@@ -342,6 +319,7 @@ void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
 			handle_server_users(p, u);
       break;
     case S_MSG_GENERIC_ERR:
+			print_error(p->error_message);
       break;
     case S_META_LOGIN_PASS:
 			handle_server_log_pass(p, u, r);
@@ -378,9 +356,6 @@ void handle_server_users(server_parsed_t *p, user_t *u) {
 		token = strtok(NULL, " ");
 	}
 }
-
-/* takes care of any error messages that arrived with the id S_MSG_GENERIC_ERR.
-prints the payload to standard out */
 
 /* this function handles packets sent from the server on register or login
 success. In both these instances the same data is returned, so this function can.

@@ -20,7 +20,7 @@ static client_t *initialize_client_info(int connfd, SSL *ssl) {
   c->connfd = connfd;
   c->ssl = ssl;
   c->is_logged = false;
-  strcpy(c->username, "");
+  memset(c->username, '\0', USERNAME_MAX+1);
   c->publen = 0;
   c->pubkey = NULL;
   c->last_updated = 0;
@@ -153,7 +153,7 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 				continue;
 			}
 			else if (bytes_read == 0) {
-				write(to_parent[1], S_MSG_CLOSE, S_MSG_LEN);
+				write(to_parent[1], PIPE_MSG_CLOSE, PIPE_MSG_LEN);
         handle_db_exit(client_info);
         close(connfd);
 				break;
@@ -192,7 +192,7 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
     sends the client all the messages that occurred since it last did
     so. */
 		if (FD_ISSET(from_parent[0], &selectfds)) {
-			read(from_parent[0], &pipe_input, S_MSG_LEN);
+			read(from_parent[0], &pipe_input, PIPE_MSG_LEN);
 		}
 	}
 
@@ -252,8 +252,6 @@ void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd) 
 
   if (!is_client_parsed_legal(p))
     return;
-  if (pipefd == 0)
-    printf("meme");
 
   switch (p->id) {
     case C_MSG_EXIT:
@@ -267,6 +265,7 @@ void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd) 
     case C_MSG_PRIVMSG:
       break;
     case C_MSG_PUBMSG:
+      handle_client_pubmsg(p, client_info, pipefd);
       break;
     case C_MSG_USERS:
       handle_client_users(p, client_info);
@@ -336,6 +335,8 @@ void handle_client_login(client_parsed_t *p, client_t *client_info) {
   free_fetched_userinfo(fetched);
 }
 
+/* handles a /users command from the client. It fetches the list of users
+(as a space delimited string) and sends it to the server */
 void handle_client_users(client_parsed_t *p, client_t *client_info) {
   int ret;
   char *fetched;
@@ -360,4 +361,29 @@ void handle_client_users(client_parsed_t *p, client_t *client_info) {
     fprintf(stderr, "failed to send user info packet\n");
 
   free(fetched);
+}
+
+/* handles a public message request. It stores the public message in the databse
+and notifies the main server that the database MESSAGES table has been updated
+so that the other workers can be notified and all users get sent their latest
+respective messages. This function does not actually send a packet. That is
+done in another function */
+
+void handle_client_pubmsg(client_parsed_t *p, client_t *client_info, int pipefd) {
+  int ret;
+  packet_t *packet;
+
+  if (!is_client_parsed_legal(p) || client_info == NULL)
+    return;
+
+  if (!client_info->is_logged) {
+    packet = gen_s_error_packet(S_MSG_GENERIC_ERR, "user is not currently logged in");
+    send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
+  }
+
+  ret = handle_db_pubmsg(p, client_info);
+  if (ret < 1)
+    fprintf(stderr, "pubmsg database failure\n");
+
+  write(pipefd, PIPE_MSG_UPDATE, PIPE_MSG_LEN);
 }

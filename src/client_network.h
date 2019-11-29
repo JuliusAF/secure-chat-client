@@ -21,4 +21,13 @@ packet_t *gen_c_login_packet(command_t *n);
 /* functions to handle a users request */
 packet_t *gen_c_users_packet(command_t *n);
 
+/* functions to handle a public message */
+unsigned char *serialize_pubmsg(char *message, user_t *u, unsigned int payload_sz);
+packet_t *gen_c_pubmsg_packet(command_t *n, user_t *u);
+
+/* these functions create a formatted message if the command is a public
+message of a private message */
+int create_date_string(char *date, time_t t);
+int create_formatted_msg(char *msg, command_t *n, user_t *u);
+
 #endif

@@ -32,7 +32,7 @@ char* trim_front_whitespace(char* input) {
 int trim_back_whitespace(char* input) {
   int input_size;
 
-  if (input == NULL)
+  if (input == NULL || strlen(input) == 0)
     return -1;
 
   input_size = strlen(input);

@@ -26,6 +26,15 @@ typedef struct parsed_client_input {
       char *username;
       unsigned char *hash_password;
     } log_packet;
+    /* a public message contains the actual message, as well as the signature
+    that signed the packet. The public key is discarded as the server already has
+    a copy of it */
+    struct {
+      unsigned int siglen;
+      unsigned char *sig;
+      unsigned int msg_sz;
+      char *message;
+    } pubmsg_packet;
   };
 
 } client_parsed_t;
@@ -37,7 +46,8 @@ client_parsed_t *parse_client_input(packet_t *p);
 int parse_client_register(packet_t *packet, client_parsed_t *parsed);
 int parse_client_login(packet_t *packet, client_parsed_t *parsed);
 int parse_client_users(packet_t *packet, client_parsed_t *parsed);
-void initialize_client_parsed(client_parsed_t *p) ;
+int parse_client_pubmsg(packet_t *packet, client_parsed_t *parsed);
+void initialize_client_parsed(client_parsed_t *p);
 bool is_client_parsed_legal(client_parsed_t *p);
 void free_client_parsed(client_parsed_t *p);
 

@@ -117,7 +117,7 @@ int main(int argc, const char* argv[]) {
 				}
 				else {
 					current_pipe = pipe_index(from_child, i);
-					bytes_read = read(i, &pipe_input, S_MSG_LEN);
+					bytes_read = read(i, &pipe_input, PIPE_MSG_LEN);
 
 					if (bytes_read == 0 ||
 							pipe_input == 'C') {
@@ -130,7 +130,7 @@ int main(int argc, const char* argv[]) {
 						/* notifies all workers that the database is updated. */
 						for (int j = 0; j < MAX_CLIENTS; j++) {
 							if (active_pipes[j])
-								write(to_child[j*2+1], S_MSG_UPDATE, S_MSG_LEN);
+								write(to_child[j*2+1], PIPE_MSG_UPDATE, PIPE_MSG_LEN);
 						}
 					}
 				}

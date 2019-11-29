@@ -25,7 +25,7 @@ signed long long get_latest_msg_rowid(void);
 int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_msg);
 int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *error_msg);
 int handle_db_privmsg(command_t *node, client_t *client_info);
-int handle_db_pubmsg(command_t *node, client_t *client_info);
+int handle_db_pubmsg(client_parsed_t *parsed, client_t *client_info);
 int handle_db_users(client_t *client_info);
 int handle_db_exit(client_t *client_info);
  /* functions that deal with fetching information from the database to send

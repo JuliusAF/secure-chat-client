@@ -130,11 +130,6 @@ int main(int argc, const char* argv[]) {
 			if (parsed == NULL)
 				goto cleanup;
 
-			if (user->is_logged) {
-				printf("private key: %s\n", user->rsa_keys->privkey);
-				printf("public key: %s\n", user->rsa_keys->pubkey);
-			}
-
 			handle_server_input(parsed, user, request);
 
 			cleanup:

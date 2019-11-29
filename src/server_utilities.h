@@ -12,9 +12,9 @@ The communication between them, however, is very simple and
 there is no need for elaborate messages. The workers tell the server
 if their connection ended with "C" and the worker tells the server,
 and vice versa, if the database has updated.*/
-#define S_MSG_UPDATE "U"
-#define S_MSG_CLOSE "C"
-#define S_MSG_LEN 1
+#define PIPE_MSG_UPDATE "U"
+#define PIPE_MSG_CLOSE "C"
+#define PIPE_MSG_LEN 1
 
 typedef struct client_info {
   int connfd;
@@ -31,5 +31,6 @@ bool is_client_sig_good(packet_t *p, client_t *c);
 void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd);
 void handle_client_login(client_parsed_t *p, client_t *client_info);
 void handle_client_users(client_parsed_t *p, client_t *client_info);
+void handle_client_pubmsg(client_parsed_t *p, client_t *client_info, int pipefd);
 
 #endif

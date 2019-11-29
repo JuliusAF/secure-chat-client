@@ -204,9 +204,6 @@ keypair_t *create_rsa_pair() {
   keys->publen = keylen;
   BIO_flush(biopub);
 
-  printf("register privkey: %s\n", keys->privkey);
-  printf("register pubkey: %s\n", keys->pubkey);
-
   cleanup:
 
   BIO_free_all(biopub);
