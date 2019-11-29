@@ -11,15 +11,6 @@
 #include "parse_client_input.h"
 #include "safe_wrappers.h"
 
-/* a lot of these functions are bloated with functionality that I will refactor
-into other functions. I have not yet had the time. This includes things like sending
-error messages from the handle_db function.*/
-
-/* Right now the users password is stored as plain text. I don't completely
-understand the cryptography part yet but I am guessing these will be changed
-into hashes.*/
-
-
 /* wrapper function to open a database connection and set busy handler so
 this code is not repeated unnecessarily*/
 sqlite3 *open_database() {
@@ -63,10 +54,8 @@ int initialize_database() {
         "PASSWORD               BLOB  NOT NULL," \
         "SALT                   BLOB  NOT NULL," \
         "PUBKEY                 BLOB  NOT NULL," \
-        "PUBKEY_LEN             INT   NOT NULL," \
         "IV                     BLOB  NOT NULL," \
         "KEYPAIR                BLOB  NOT NULL," \
-        "KEYPAIR_LEN            INT   NOT NULL," \
         "STATUS                 INT   NOT NULL );";
 
   rc = sqlite3_exec(db, sql, 0, 0, &err_msg);
@@ -82,7 +71,6 @@ int initialize_database() {
         "SENDER               TEXT  NOT NULL," \
         "RECIPIENT            TEXT," \
         "MESSAGE              BLOB  NOT NULL," \
-        "MESSAGE_LEN          INT   NOT NULL," \
         "IV                   BLOB," \
         "S_SYMKEY             BLOB," \
         "R_SYMKEY             BLOB );";
@@ -206,7 +194,7 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
   verification of login credentials
   Also gets the length of pubkey and pubkey. If verification is successful, these
   are stored by the server */
-  sql = "SELECT PASSWORD, SALT, STATUS, PUBKEY_LEN, PUBKEY FROM USERS WHERE USERNAME = ?1";
+  sql = "SELECT PASSWORD, SALT, STATUS, PUBKEY FROM USERS WHERE USERNAME = ?1";
 
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK)
@@ -250,13 +238,13 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
     db_hashed_pass[SHA256_DIGEST_LENGTH] = '\0';
 
     /* get the size of the public key and allocate the necessary space */
-    publen = sqlite3_column_int(res, 3);
+    publen = sqlite3_column_bytes(res, 3);
     pubkey = safe_malloc(sizeof(char) * publen+1);
     if (pubkey == NULL) {
       ret = 0;
       goto cleanup;
     }
-    tmp = sqlite3_column_blob(res, 4);
+    tmp = sqlite3_column_blob(res, 3);
     memcpy(pubkey, tmp, publen);
     pubkey[publen] = '\0';
   }
@@ -381,7 +369,7 @@ int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err
 
   /* If there are no errors the users identification is input into the db and
   their status is set to online automatically */
-  sql = "INSERT INTO USERS VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1)";
+  sql = "INSERT INTO USERS VALUES(?1, ?2, ?3, ?4, ?5, ?6, 1)";
 
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK) {
@@ -389,10 +377,8 @@ int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err
     sqlite3_bind_blob(res, 2, hashed_pass, SHA256_DIGEST_LENGTH, SQLITE_STATIC);
     sqlite3_bind_blob(res, 3, salt, SALT_SIZE, SQLITE_STATIC);
     sqlite3_bind_blob(res, 4, pubkey, publen, SQLITE_STATIC);
-    sqlite3_bind_int(res, 5, publen);
-    sqlite3_bind_blob(res, 6, iv, IV_SIZE, SQLITE_STATIC);
-    sqlite3_bind_blob(res, 7, keys, keyslen, SQLITE_STATIC);
-    sqlite3_bind_int(res, 8, keyslen);
+    sqlite3_bind_blob(res, 5, iv, IV_SIZE, SQLITE_STATIC);
+    sqlite3_bind_blob(res, 6, keys, keyslen, SQLITE_STATIC);
   }
   else {
     fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
@@ -501,10 +487,10 @@ int handle_db_exit(client_t *client_info) {
   be done. The function returns successfully */
   if (!client_info->is_logged) {
     sqlite3_close(db);
-    return COMMAND_EXIT;
+    return 1;
   }
 
-  sql = "UPDATE Users SET Status = 0 WHERE Username = ?";
+  sql = "UPDATE USERS SET STATUS = 0 WHERE USERNAME = ?";
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK) {
     strcpy(name, client_info->username);
@@ -555,7 +541,7 @@ fetched_userinfo_t *fetch_db_user_info(client_t *client_info) {
     goto cleanup;
 
   /* select the relevant columns from the table for the user who is currently logged in */
-  sql = "SELECT IV, KEYPAIR, KEYPAIR_LEN FROM USERS WHERE USERNAME = ?1";
+  sql = "SELECT IV, KEYPAIR FROM USERS WHERE USERNAME = ?1";
 
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK) {
@@ -577,11 +563,7 @@ fetched_userinfo_t *fetch_db_user_info(client_t *client_info) {
     memcpy(fetched->iv, tmp, IV_SIZE);
     fetched->iv[IV_SIZE] = '\0';
 
-    size = (unsigned int) sqlite3_column_int(res, 2);
-    if (size != sqlite3_column_bytes(res, 1)) {
-      fprintf(stderr, "incorrect encrypted key length for user data\n");
-      goto cleanup;
-    }
+    size = (unsigned int) sqlite3_column_bytes(res, 1);
     fetched->encrypt_sz = size;
     fetched->encrypted_keys = safe_malloc(sizeof(unsigned char) * size+1);
     if (fetched->encrypted_keys == NULL)

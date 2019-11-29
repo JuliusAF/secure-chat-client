@@ -379,6 +379,9 @@ void handle_server_users(server_parsed_t *p, user_t *u) {
 	}
 }
 
+/* takes care of any error messages that arrived with the id S_MSG_GENERIC_ERR.
+prints the payload to standard out */
+
 /* this function handles packets sent from the server on register or login
 success. In both these instances the same data is returned, so this function can.
 This function checks for any errors, and if there are none sets the client to logged
