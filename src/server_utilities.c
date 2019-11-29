@@ -159,7 +159,7 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 				break;
 			}
 
-      packet = unpack_packet(input, bytes_read);
+      packet = deserialize_packet(input, bytes_read);
       if (packet == NULL)
         goto cleanup;
 

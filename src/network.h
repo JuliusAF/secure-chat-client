@@ -66,7 +66,7 @@ bool is_packet_legal(packet_t *p);
 packet_hdr_t *initialize_header(uint16_t id, uint32_t sz);
 packet_t *pack_packet(packet_hdr_t *header, unsigned char *payload);
 unsigned char *serialize_packet(packet_t *p);
-packet_t *unpack_packet(unsigned char *buffer, int size);
+packet_t *deserialize_packet(unsigned char *buffer, int size);
 void free_packet(packet_t *p);
 
 #endif

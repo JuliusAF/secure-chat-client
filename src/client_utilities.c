@@ -339,6 +339,7 @@ void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
     case S_MSG_PRIVMSG:
       break;
     case S_MSG_USERS:
+			handle_server_users(p, u);
       break;
     case S_MSG_GENERIC_ERR:
       break;
@@ -360,8 +361,23 @@ void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
 
 }
 
-/* this functions deals with a packet that the server returns when it receives
-a /user request from the client */
+/* this functions deals the list of users sent from the server in response to
+a successful /users command */
+void handle_server_users(server_parsed_t *p, user_t *u) {
+	char *token, *tmp;
+
+	if (!is_server_parsed_legal(p) || u == NULL)
+		return;
+
+	tmp = p->users;
+	token = strtok(tmp, " ");
+
+	while (token != NULL) {
+		write(1, token, strlen(token));
+		write(1, "\n", 1);
+		token = strtok(NULL, " ");
+	}
+}
 
 /* this function handles packets sent from the server on register or login
 success. In both these instances the same data is returned, so this function can.
@@ -374,9 +390,7 @@ void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
 	keypair_t *keys = NULL;
 
 	if (!is_server_parsed_legal(p) ||
-			u == NULL || r == NULL ||
-			(p->id != S_META_LOGIN_PASS &&
-			p->id != S_META_REGISTER_PASS))
+			u == NULL || r == NULL)
 		return;
 	if (!r->is_request_active) {
 		fprintf(stderr, "No active register request\n");

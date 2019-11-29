@@ -122,7 +122,7 @@ int main(int argc, const char* argv[]) {
 				free(server_output);
 				break;
 			}
-			packet = unpack_packet(server_output, bytes_read);
+			packet = deserialize_packet(server_output, bytes_read);
 			if (packet == NULL)
 				goto cleanup;
 

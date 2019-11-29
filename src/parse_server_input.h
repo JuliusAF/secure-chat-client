@@ -23,6 +23,9 @@ typedef struct parsed_server_input {
     /* when an error is sent from server to client, the packet contains
     only an error message in its payload.*/
     char *error_message;
+    /* a /users response contains a single string that contains every user
+    currently logged in, delimited with a space */
+    char *users;
   };
 } server_parsed_t;
 
@@ -31,7 +34,7 @@ typedef struct packet_to_send packet_t;
 /* functions for parsing packets sent from server to client*/
 
 server_parsed_t *parse_server_input(packet_t *p);
-bool is_server_parsed_legal(server_parsed_t *p);
+int parse_server_users(packet_t *packet, server_parsed_t *parsed);
 int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed);
 int parse_server_error(packet_t *packet, server_parsed_t *parsed);
 void initialize_server_parsed(server_parsed_t *p);

@@ -34,6 +34,7 @@ server_parsed_t *parse_server_input(packet_t *p) {
     case S_MSG_PRIVMSG:
       break;
     case S_MSG_USERS:
+      ret = parse_server_users(p, parsed);
       break;
     case S_MSG_GENERIC_ERR:
       ret = parse_server_error(p, parsed);
@@ -62,12 +63,34 @@ server_parsed_t *parse_server_input(packet_t *p) {
   return parsed;
 }
 
+/* parses a packet that contains a list of users in byte array format from
+the server
+Returns:
+1 on success
+-1 on failure */
+int parse_server_users(packet_t *packet, server_parsed_t *parsed) {
+  unsigned size;
+  char *users;
+  if (!is_packet_legal(packet) || parsed == NULL)
+    return -1;
+
+  size = packet->header->pckt_sz;
+  users = safe_malloc(sizeof(char) * size+1);
+  if (users == NULL)
+    return -1;
+  memcpy(users, packet->payload, size);
+  users[size] = '\0';
+  parsed->users = users;
+
+  return 1;
+}
+
 /* parses a packet that contains user data into the respective struct. Both
 login success and register success can return a packet that contains user info
 which is parsed into the same struct data fields here.
 Returns:
--1 on failure
-1 on success*/
+1 on success
+-1 on failure */
 
 int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed) {
   unsigned int size;
@@ -114,6 +137,7 @@ int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed) {
   return 1;
 }
 
+/* helper function that checks if an id is one of the error ids */
 static bool is_id_error(server_parsed_t *p) {
   if (p == NULL)
     return false;
@@ -148,6 +172,8 @@ int parse_server_error(packet_t *packet, server_parsed_t *parsed) {
   return 1;
 }
 
+/* initializes an pointers in the server_parsed_t struct. Which pointers must
+be initialized is dependent on the id of the packet */
 void initialize_server_parsed(server_parsed_t *p) {
   if (p == NULL)
     return;
@@ -158,6 +184,7 @@ void initialize_server_parsed(server_parsed_t *p) {
     case S_MSG_PRIVMSG:
       break;
     case S_MSG_USERS:
+      p->users = NULL;
       break;
     case S_MSG_GENERIC_ERR:
       p->error_message = NULL;
@@ -192,6 +219,8 @@ bool is_server_parsed_legal(server_parsed_t *p) {
     case S_MSG_PRIVMSG:
       break;
     case S_MSG_USERS:
+      if (p->users == NULL)
+        return false;
       break;
     case S_MSG_GENERIC_ERR:
       if (p->error_message == NULL)
@@ -232,6 +261,7 @@ void free_server_parsed(server_parsed_t *p) {
     case S_MSG_PRIVMSG:
       break;
     case S_MSG_USERS:
+      free(p->users);
       break;
     case S_MSG_GENERIC_ERR:
       free(p->error_message);

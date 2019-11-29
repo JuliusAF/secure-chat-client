@@ -45,6 +45,7 @@ void print_error(char *s);
 
 /* the functions handle packets coming from the server over the socket */
 void handle_server_input(server_parsed_t *p, user_t *u, request_t *r);
+void handle_server_users(server_parsed_t *p, user_t *u);
 void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r);
 void handle_server_log_fail(server_parsed_t *p, user_t *u, request_t *r);
 

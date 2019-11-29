@@ -252,7 +252,7 @@ unsigned char *serialize_packet(packet_t *p) {
 
 /* deconstructs a character buffer containing a packet into a packet struct
 which will be used for further processing later*/
-packet_t *unpack_packet(unsigned char *buffer, int size) {
+packet_t *deserialize_packet(unsigned char *buffer, int size) {
   int index = 0;
   packet_t *packet;
   packet_hdr_t *header;
