@@ -115,6 +115,24 @@ void sign_client_packet(packet_t *p, user_t *u) {
 	free(hash);
 }
 
+/* this function verifies another clients signature. This signature may be its own.
+The signature is transmitted as part of a message (public or private) */
+bool verify_client_payload(char *pkey, unsigned int plen, unsigned char *s, unsigned int slen, unsigned char *hash) {
+	bool ret;
+	BIO *bio;
+  EVP_PKEY *key = EVP_PKEY_new();
+  RSA *rsa;
+
+  bio = BIO_new_mem_buf(pkey, plen);
+  rsa = PEM_read_bio_RSAPublicKey(bio, NULL, NULL, NULL);
+  EVP_PKEY_assign_RSA(key, rsa);
+
+  ret = rsa_verify_sha256(key, s, hash, slen, SHA256_DIGEST_LENGTH);
+
+  BIO_free(bio);
+  return ret;
+}
+
 /* this function handles the user input dependent on how it was parsed.
 From this function, the packets for each command are created and sent
 to the server*/
@@ -301,6 +319,12 @@ void print_error(char *s) {
 	write(1, "\n", 1);
 }
 
+
+
+
+
+
+
 /* these functions deal with input from the server. This includes storing
 data obtained from the server if necessary and printing messages */
 
@@ -312,6 +336,7 @@ void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
 
 	switch (p->id) {
     case S_MSG_PUBMSG:
+			handle_server_pubmsg(p, u);
       break;
     case S_MSG_PRIVMSG:
       break;
@@ -355,6 +380,20 @@ void handle_server_users(server_parsed_t *p, user_t *u) {
 		write(1, "\n", 1);
 		token = strtok(NULL, " ");
 	}
+}
+
+void handle_server_pubmsg(server_parsed_t *p, user_t *u) {
+	if (!is_server_parsed_legal(p) || u == NULL)
+		return;
+
+	if (!verify_client_payload(p->messages.pubkey, p->messages.publen, p->messages.sig,
+			p->messages.siglen, p->messages.hashed_payload)) {
+		fprintf(stderr, "author of message doesn't match\n");
+		return;
+	}
+
+	write(STDOUT_FILENO, p->messages.message, p->messages.msglen);
+	write(STDOUT_FILENO, "\n", 1);
 }
 
 /* this function handles packets sent from the server on register or login

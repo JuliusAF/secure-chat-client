@@ -193,6 +193,9 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
     so. */
 		if (FD_ISSET(from_parent[0], &selectfds)) {
 			read(from_parent[0], &pipe_input, PIPE_MSG_LEN);
+      if (pipe_input == 'U') {
+        handle_db_msg_update(client_info);
+      }
 		}
 	}
 
@@ -258,9 +261,11 @@ void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd) 
       break;
     case C_MSG_LOGIN:
       handle_client_login(p, client_info);
+      handle_db_msg_update(client_info);
       break;
     case C_MSG_REGISTER:
       handle_client_login(p, client_info);
+      handle_db_msg_update(client_info);
       break;
     case C_MSG_PRIVMSG:
       break;
@@ -386,4 +391,60 @@ void handle_client_pubmsg(client_parsed_t *p, client_t *client_info, int pipefd)
     fprintf(stderr, "pubmsg database failure\n");
 
   write(pipefd, PIPE_MSG_UPDATE, PIPE_MSG_LEN);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* this function deals with a database message update. It searches for all
+messages written to the database since last update (using the fetch_db_messages() function)
+and sends them too the client. The messages are only those the client should be permitted to see */
+
+void handle_db_msg_update(client_t *client_info) {
+  int ret;
+  msg_queue_t *queue = NULL;
+  packet_t *packet;
+
+  if (client_info == NULL || !client_info->is_logged)
+    return;
+
+  queue = fetch_db_messages(client_info);
+  if (queue == NULL || queue->top == 0)
+    return;
+
+  /*packet = gen_s_msgcount_packet(queue->top);
+  ret = send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
+  if (ret < 0) {
+    fprintf(stderr, "failed to send message count packet\n");
+    goto cleanup;
+  }*/
+
+  for (unsigned int i = 0; i < queue->top; i++) {
+    packet = gen_s_msg_packet(queue->messages[i]);
+    ret = send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
+    if (ret < 0) {
+      fprintf(stderr, "failed to send message packet\n");
+    }
+  }
+
+  client_info->last_updated = queue->max_rowid;
+
+  cleanup:
+
+  free_msg_queue(queue);
 }

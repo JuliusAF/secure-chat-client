@@ -70,7 +70,7 @@ int initialize_database() {
   sql = "CREATE TABLE IF NOT EXISTS MESSAGES(" \
         "SENDER               TEXT  NOT NULL," \
         "RECIPIENT            TEXT," \
-        "MESSAGE              TEXT  NOT NULL," \
+        "MESSAGE              BLOB  NOT NULL," \
         "SIGNATURE            BLOB  NOT NULL," \
         "IV                   BLOB," \
         "S_SYMKEY             BLOB," \
@@ -466,6 +466,10 @@ int handle_db_pubmsg(client_parsed_t *parsed, client_t *client_info) {
   return ret;
 }
 
+/* logs a user off of the database. This means setting their status to 0
+Returns:
+1 on success
+0 on failure */
 int handle_db_exit(client_t *client_info) {
   char *sql, name[USERNAME_MAX+1];
   int rc, step;
@@ -492,14 +496,14 @@ int handle_db_exit(client_t *client_info) {
   else {
     fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
     sqlite3_close(db);
-    return -1;
+    return 0;
   }
 
   step = sqlite3_step(res);
   if (step != SQLITE_DONE) {
     fprintf(stderr, "Failed to execute statement: %s \n", sqlite3_errmsg(db));
     sqlite3_close(db);
-    return -1;
+    return 0;
   }
 
   strcpy(client_info->username, "");
@@ -520,7 +524,7 @@ fetched_userinfo_t *fetch_db_user_info(client_t *client_info) {
   sqlite3_stmt *res = NULL;
   sqlite3 *db = NULL;
 
-  if (client_info->is_logged == false || client_info == NULL ||
+  if (client_info == NULL || client_info->is_logged == false ||
       strlen(client_info->username) == 0)
     return NULL;
 
@@ -571,6 +575,76 @@ fetched_userinfo_t *fetch_db_user_info(client_t *client_info) {
   sqlite3_finalize(res);
   sqlite3_close(db);
   return fetched;
+}
+
+/* this function returns a msg_queue_t struct that holds all the messages relevant
+to the user. The structure preserves the chronology of messages, with the oldest message
+no yet updated to the user being in the first index. */
+
+msg_queue_t *fetch_db_messages(client_t *client_info) {
+  msg_queue_t *queue = NULL;
+  msg_components_t *cmps = NULL;
+  char *sql;
+  int rc, step, ret;
+  signed long long rowid;
+  sqlite3_stmt *res = NULL;
+  sqlite3 *db = NULL;
+
+  if (client_info == NULL || client_info->is_logged == false ||
+      strlen(client_info->username) == 0)
+    return NULL;
+
+  /*rowid = get_latest_msg_rowid();
+  if (rowid < 0)
+    return NULL;*/
+
+  db = open_database();
+  if (db == NULL)
+    return NULL;
+
+  sql = "SELECT MESSAGES.ROWID, MESSAGE, PUBKEY, SIGNATURE, RECIPIENT, MESSAGES.IV, S_SYMKEY, R_SYMKEY FROM (USERS, MESSAGES)"
+        "WHERE ((SENDER = ?1 OR RECIPIENT = ?1 OR RECIPIENT IS NULL) AND"
+        "(USERS.USERNAME = MESSAGES.SENDER) AND"
+        "(MESSAGES.ROWID > ?2))";
+
+  rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
+  if (rc == SQLITE_OK) {
+    sqlite3_bind_text(res, 1, client_info->username, -1, SQLITE_STATIC);
+    sqlite3_bind_int64(res, 2, client_info->last_updated);
+  }
+  else {
+    fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
+    goto cleanup;
+  }
+
+  queue = initialize_msg_queue();
+  if (queue == NULL)
+    goto cleanup;
+
+  step = sqlite3_step(res);
+  if (step != SQLITE_ROW)
+    goto cleanup;
+
+  while (step == SQLITE_ROW) {
+    rowid = (signed long long) sqlite3_column_int64(res, 0);
+    cmps = assign_msg_components(res);
+    if (cmps != NULL) {
+      ret = add_msg_component(queue, cmps);
+      if (ret < 0) {
+        fprintf(stderr, "enqueue message components failed\n");
+        queue = NULL;
+        goto cleanup;
+      }
+    }
+    step = sqlite3_step(res);
+  }
+  queue->max_rowid = rowid;
+
+  cleanup:
+
+  sqlite3_finalize(res);
+  sqlite3_close(db);
+  return queue;
 }
 
 /* this functions fetches every user currently logged in and places them into

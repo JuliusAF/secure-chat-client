@@ -5,6 +5,9 @@
 #include <openssl/ssl.h>
 #include "cryptography.h"
 
+
+/* maximum size for rsa signature*/
+#define MAX_SIG_SZ 256
 /* defines fixed size of header*/
 #define HEADER_SIZE (sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint32_t) + MAX_SIG_SZ)
 /* The limit here is reasonably higher than what is needed, but
@@ -40,9 +43,11 @@ a constant as a user command requires no information from the client */
 #define S_META_LOGIN_FAIL 2102
 #define S_META_REGISTER_PASS 2103
 #define S_META_REGISTER_FAIL 2104
+#define S_META_MSG_COUNT 2105
 
-/* maximum size for rsa signature*/
-#define MAX_SIG_SZ 256
+/* the S_META_MSG_COUNT has a fixed size, as it transmits only the number of packets
+the client is to expect for messages */
+#define META_MSG_COUNT_SIZE sizeof(unsigned int) 
 
 typedef struct packet_header {
   uint32_t pckt_sz;

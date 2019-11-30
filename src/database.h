@@ -26,13 +26,14 @@ from the client */
 signed long long get_latest_msg_rowid(void);
 int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_msg);
 int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *error_msg);
-int handle_db_privmsg(command_t *node, client_t *client_info);
+int handle_db_pubmsg(client_parsed_t *parsed, client_t *client_info);
 int handle_db_pubmsg(client_parsed_t *parsed, client_t *client_info);
 int handle_db_users(client_t *client_info);
 int handle_db_exit(client_t *client_info);
  /* functions that deal with fetching information from the database to send
  to the client later */
 fetched_userinfo_t *fetch_db_user_info(client_t *client_info);
+msg_queue_t *fetch_db_messages(client_t *client_info);
 char *fetch_db_users(void);
 
 

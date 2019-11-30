@@ -72,6 +72,9 @@ packet_t *gen_s_users_packet(char *users) {
   unsigned char *payload = NULL;
   packet_hdr_t *header = NULL;
 
+  if (users == NULL)
+    return NULL;
+
   header = initialize_header(S_MSG_USERS, strlen(users));
   payload = safe_malloc(sizeof(unsigned char) * strlen(users));
   if (payload == NULL || header == NULL) {
@@ -81,6 +84,105 @@ packet_t *gen_s_users_packet(char *users) {
   }
 
   memcpy(payload, users, strlen(users));
+
+  return pack_packet(header, payload);
+}
+
+/* the function serializes a message payload. It gets the components of the message
+from a msg_components_t struct and the size of the expected payload from the second
+argument unsigned int payload_sz */
+unsigned char *serialize_message(msg_components_t *m, unsigned int payload_sz) {
+  unsigned char *payload = NULL, *tmp;
+
+  if (m == NULL)
+    return NULL;
+
+  payload = safe_malloc(sizeof(unsigned char) * payload_sz);
+  if (payload == NULL)
+    return NULL;
+
+  tmp = payload;
+
+  memcpy(tmp, &m->siglen, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  memcpy(tmp, m->sig, m->siglen);
+  tmp += m->siglen;
+  memcpy(tmp, &m->publen, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  memcpy(tmp, m->pubkey, m->publen);
+  tmp += m->publen;
+  memcpy(tmp, &m->msglen, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  memcpy(tmp, m->message, m->msglen);
+  tmp += m->msglen;
+
+  if (m->type == PRIV_MSG_TYPE) {
+    /* constant 20 bytes is allocated for recipient name. Size defined in USERNAME_MAX */
+    memset(tmp, '\0', USERNAME_MAX);
+    memcpy(tmp, m->recipient, m->reclen);
+    tmp += USERNAME_MAX;
+
+    memcpy(tmp, m->iv, IV_SIZE);
+    tmp += IV_SIZE;
+    memcpy(tmp, &m->s_symkeylen, sizeof(unsigned int));
+    tmp += sizeof(unsigned int);
+    memcpy(tmp, m->s_symkey, m->s_symkeylen);
+    tmp += m->s_symkeylen;
+    memcpy(tmp, &m->r_symkeylen, sizeof(unsigned int));
+    tmp += sizeof(unsigned int);
+    memcpy(tmp, m->r_symkey, m->r_symkeylen);
+  }
+
+  return payload;
+}
+
+/* this function creates a packet for a message packet. There are two types of messages,
+public and private. The public message has all the same components as a private message,
+but a private message had extra fields. As such their makeups differ */
+packet_t *gen_s_msg_packet(msg_components_t *m) {
+  unsigned int payload_sz;
+  unsigned char *payload = NULL;
+  packet_hdr_t *header = NULL;
+
+  if (m == NULL || m->type == 0)
+    return NULL;
+
+  payload_sz = sizeof(unsigned int) + m->siglen + sizeof(unsigned int) + m->publen +
+               sizeof(unsigned int) + m->msglen;
+
+  if (m->type == PRIV_MSG_TYPE) {
+    payload_sz += USERNAME_MAX + IV_SIZE + sizeof(unsigned int) + m->s_symkeylen +
+                  sizeof(unsigned int) + m->r_symkeylen;
+  }
+  payload = serialize_message(m, payload_sz);
+  if (m->type == PUB_MSG_TYPE)
+    header = initialize_header(S_MSG_PUBMSG, payload_sz);
+  else
+    header = initialize_header(S_MSG_PRIVMSG, payload_sz);
+
+  if (header == NULL || payload == NULL) {
+    free(header);
+    free(payload);
+    return NULL;
+  }
+
+  return pack_packet(header, payload);
+}
+
+/* creates a packet that tells the client how many messages it is to expect */
+packet_t *gen_s_msgcount_packet(unsigned int count) {
+  unsigned char *payload = NULL;
+  packet_hdr_t *header = NULL;
+
+  header = initialize_header(S_META_MSG_COUNT, META_MSG_COUNT_SIZE);
+  payload = safe_malloc(sizeof(unsigned char) * META_MSG_COUNT_SIZE);
+  if (payload == NULL || header == NULL) {
+    free(header);
+    free(payload);
+    return NULL;
+  }
+
+  memcpy(payload, &count, sizeof(unsigned int));
 
   return pack_packet(header, payload);
 }

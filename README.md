@@ -95,7 +95,11 @@ This message is compiled in client_network.c with the function gen_c_register_pa
 
 ### Private message command:
 
+pubkey, message, recipient, iv, s_symkey, r_symkey
+
 ### Public message command:
+
+pubkey, message;
 
 ### Users command:
 
