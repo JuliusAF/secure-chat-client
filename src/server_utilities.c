@@ -393,24 +393,6 @@ void handle_client_pubmsg(client_parsed_t *p, client_t *client_info, int pipefd)
   write(pipefd, PIPE_MSG_UPDATE, PIPE_MSG_LEN);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /* this function deals with a database message update. It searches for all
 messages written to the database since last update (using the fetch_db_messages() function)
 and sends them too the client. The messages are only those the client should be permitted to see */

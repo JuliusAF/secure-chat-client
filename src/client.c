@@ -29,6 +29,10 @@ static void verify_arguments(int argc, const char* argv[]) {
 		fprintf(stderr, "Port must be a number\n");
 		exit(EXIT_FAILURE);
 	}
+	else if (atoi(argv[2]) < 0 || atoi(argv[2]) > 65535) {
+		fprintf(stderr, "Port range is incorrect. Must be between 1-65535\n");
+		exit(EXIT_FAILURE);
+	}
 }
 
 int main(int argc, const char* argv[]) {
