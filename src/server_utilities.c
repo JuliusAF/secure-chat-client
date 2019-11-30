@@ -424,9 +424,10 @@ void handle_db_msg_update(client_t *client_info) {
     return;
 
   queue = fetch_db_messages(client_info);
-  if (queue == NULL || queue->top == 0)
+  if (queue == NULL || queue->top == 0) {
+    free_msg_queue(queue);
     return;
-
+}
   /*packet = gen_s_msgcount_packet(queue->top);
   ret = send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
   if (ret < 0) {
@@ -444,7 +445,7 @@ void handle_db_msg_update(client_t *client_info) {
 
   client_info->last_updated = queue->max_rowid;
 
-  cleanup:
+  //cleanup:
 
   free_msg_queue(queue);
 }

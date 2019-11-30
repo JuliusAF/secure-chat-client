@@ -152,7 +152,6 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   tmp = packet->payload;
   tmpend = tmp+size;
 
-
   /* the returned sizes must be checked to discover memory overflows.
   Inputs the signature and its length into the struct */
   if ((tmp + sizeof(unsigned int)) > tmpend)
