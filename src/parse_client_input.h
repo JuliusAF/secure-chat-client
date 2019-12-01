@@ -38,6 +38,8 @@ typedef struct parsed_client_input {
     /* a request for another users public key also includes the encrypted message and iv to make
     responding to the return message on the client side easier. saves  */
     struct {
+      unsigned int siglen;
+      unsigned char *sig;
       char *username;
       unsigned int original_sz;
       unsigned char *original;

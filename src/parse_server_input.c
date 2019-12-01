@@ -53,7 +53,7 @@ server_parsed_t *parse_server_input(packet_t *p) {
       ret = parse_server_error(p, parsed);
       break;
     case S_META_PUBKEY_RESPONSE:
-      ret = parse_server_pubkey_rqst(p, parsed);
+      ret = parse_server_pubkey_response(p, parsed);
       break;
     default:
       ret = -1;
@@ -265,9 +265,9 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
 }
 
 /* parses a server response to a public key request */
-int parse_server_pubkey_rqst(packet_t *packet, server_parsed_t *parsed) {
-  unsigned int size;
-  unsigned char *tmp, *tmpend;
+int parse_server_pubkey_response(packet_t *packet, server_parsed_t *parsed) {
+  unsigned int size, len_to_hash;
+  unsigned char *tmp, *tmpend, *hash;
 
   if (packet == NULL || parsed == NULL)
     return -1;
@@ -279,50 +279,73 @@ int parse_server_pubkey_rqst(packet_t *packet, server_parsed_t *parsed) {
   /* check if reading the size of the key causes buffer overflow, if not copy it */
   if ((tmp + sizeof(unsigned int)) > tmpend)
     return -1;
-  memcpy(&parsed->pubkey_rqst.keylen, tmp, sizeof(unsigned int));
+  memcpy(&parsed->pubkey_response.keylen, tmp, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
 
   /* check if reading the key causes buffer overflow, if not copy it */
-  if ((tmp + parsed->pubkey_rqst.keylen) > tmpend)
+  if ((tmp + parsed->pubkey_response.keylen) > tmpend)
     return -1;
-  parsed->pubkey_rqst.key = safe_malloc(sizeof(unsigned char) * parsed->pubkey_rqst.keylen+1);
-  if (parsed->pubkey_rqst.key == NULL)
+  parsed->pubkey_response.key = safe_malloc(sizeof(unsigned char) * parsed->pubkey_response.keylen+1);
+  if (parsed->pubkey_response.key == NULL)
     return -1;
-  memcpy(parsed->pubkey_rqst.key, tmp, parsed->pubkey_rqst.keylen);
-  parsed->pubkey_rqst.key[parsed->pubkey_rqst.keylen] = '\0';
-  tmp += parsed->pubkey_rqst.keylen;
+  memcpy(parsed->pubkey_response.key, tmp, parsed->pubkey_response.keylen);
+  parsed->pubkey_response.key[parsed->pubkey_response.keylen] = '\0';
+  tmp += parsed->pubkey_response.keylen;
+
+  /* copy the size of the signature and the signature into their respective variables */
+  if ((tmp + sizeof(unsigned int)) > tmpend)
+    return -1;
+  memcpy(&parsed->pubkey_response.siglen, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+
+  if ((tmp + parsed->pubkey_response.siglen) > tmpend)
+    return -1;
+  parsed->pubkey_response.sig = safe_malloc(sizeof(unsigned char) * parsed->pubkey_response.siglen+1);
+  memcpy(parsed->pubkey_response.sig, tmp, parsed->pubkey_response.siglen);
+  parsed->pubkey_response.sig[parsed->pubkey_response.siglen] = '\0';
+  tmp += parsed->pubkey_response.siglen;
+
+  /* what remains the the packet not is the original payload sent to the server, if it
+  was preserved. This is hashed and stored in order to validate the validity of the returned
+  message */
+  /* remaining size of packet */
+  len_to_hash = tmpend - tmp;
+  hash = hash_input( (char *) tmp, len_to_hash);
+  if (hash == NULL)
+    return -1;
+  parsed->pubkey_response.hashed_payload = hash;
 
   /* check if reading the username causes buffer overflow, if not copy it */
   if ((tmp + USERNAME_MAX) > tmpend)
     return -1;
-  parsed->pubkey_rqst.username = safe_malloc(sizeof(char) * USERNAME_MAX+1);
-  if (parsed->pubkey_rqst.username == NULL)
+  parsed->pubkey_response.username = safe_malloc(sizeof(char) * USERNAME_MAX+1);
+  if (parsed->pubkey_response.username == NULL)
     return -1;
-  memset(parsed->pubkey_rqst.username, '\0', USERNAME_MAX+1);
-  memcpy(parsed->pubkey_rqst.username, tmp, USERNAME_MAX);
+  memset(parsed->pubkey_response.username, '\0', USERNAME_MAX+1);
+  memcpy(parsed->pubkey_response.username, tmp, USERNAME_MAX);
   tmp += USERNAME_MAX;
 
   /* checks if the next known required reads cause buffer overflow */
   if ((tmp + IV_SIZE + sizeof(unsigned int)) > tmpend)
     return -1;
-  parsed->pubkey_rqst.iv = safe_malloc(sizeof(unsigned char) * IV_SIZE+1);
-  if (parsed->pubkey_rqst.iv == NULL)
+  parsed->pubkey_response.iv = safe_malloc(sizeof(unsigned char) * IV_SIZE+1);
+  if (parsed->pubkey_response.iv == NULL)
     return -1;
-  memcpy(parsed->pubkey_rqst.iv, tmp, IV_SIZE);
-  parsed->pubkey_rqst.iv[IV_SIZE] = '\0';
+  memcpy(parsed->pubkey_response.iv, tmp, IV_SIZE);
+  parsed->pubkey_response.iv[IV_SIZE] = '\0';
   tmp += IV_SIZE;
 
-  memcpy(&parsed->pubkey_rqst.encrypt_sz, tmp, sizeof(unsigned int));
+  memcpy(&parsed->pubkey_response.encrypt_sz, tmp, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
 
   /* check if reading the encrypted message causes buffer overflow, if not copy it */
-  if ((tmp + parsed->pubkey_rqst.encrypt_sz) > tmpend)
+  if ((tmp + parsed->pubkey_response.encrypt_sz) > tmpend)
     return -1;
-  parsed->pubkey_rqst.encrypted_msg = safe_malloc(sizeof(unsigned char) * parsed->pubkey_rqst.encrypt_sz+1);
-  if (parsed->pubkey_rqst.encrypted_msg == NULL)
+  parsed->pubkey_response.encrypted_msg = safe_malloc(sizeof(unsigned char) * parsed->pubkey_response.encrypt_sz+1);
+  if (parsed->pubkey_response.encrypted_msg == NULL)
     return -1;
-  memcpy(parsed->pubkey_rqst.encrypted_msg, tmp, parsed->pubkey_rqst.encrypt_sz);
-  parsed->pubkey_rqst.encrypted_msg[parsed->pubkey_rqst.encrypt_sz] = '\0';
+  memcpy(parsed->pubkey_response.encrypted_msg, tmp, parsed->pubkey_response.encrypt_sz);
+  parsed->pubkey_response.encrypted_msg[parsed->pubkey_response.encrypt_sz] = '\0';
 
   return 1;
 }
@@ -402,10 +425,12 @@ void initialize_server_parsed(server_parsed_t *p) {
       p->error_message = NULL;
       break;
     case S_META_PUBKEY_RESPONSE:
-      p->pubkey_rqst.key = NULL;
-      p->pubkey_rqst.username = NULL;
-      p->pubkey_rqst.iv = NULL;
-      p->pubkey_rqst.encrypted_msg = NULL;
+      p->pubkey_response.key = NULL;
+      p->pubkey_response.sig = NULL;
+      p->pubkey_response.hashed_payload = NULL;
+      p->pubkey_response.username = NULL;
+      p->pubkey_response.iv = NULL;
+      p->pubkey_response.encrypted_msg = NULL;
       break;
     default:
       break;
@@ -463,10 +488,12 @@ bool is_server_parsed_legal(server_parsed_t *p) {
         return false;
       break;
     case S_META_PUBKEY_RESPONSE:
-      if (p->pubkey_rqst.key == NULL ||
-          p->pubkey_rqst.username == NULL ||
-          p->pubkey_rqst.iv == NULL ||
-          p->pubkey_rqst.encrypted_msg == NULL)
+      if (p->pubkey_response.key == NULL ||
+          p->pubkey_response.sig == NULL ||
+          p->pubkey_response.hashed_payload == NULL ||
+          p->pubkey_response.username == NULL ||
+          p->pubkey_response.iv == NULL ||
+          p->pubkey_response.encrypted_msg == NULL)
         return false;
       break;
     default:
@@ -514,10 +541,12 @@ void free_server_parsed(server_parsed_t *p) {
       free(p->error_message);
       break;
     case S_META_PUBKEY_RESPONSE:
-      free(p->pubkey_rqst.key);
-      free(p->pubkey_rqst.username);
-      free(p->pubkey_rqst.iv);
-      free(p->pubkey_rqst.encrypted_msg);
+      free(p->pubkey_response.key);
+      free(p->pubkey_response.sig);
+      free(p->pubkey_response.hashed_payload);
+      free(p->pubkey_response.username);
+      free(p->pubkey_response.iv);
+      free(p->pubkey_response.encrypted_msg);
       break;
     default:
       break;

@@ -55,11 +55,14 @@ typedef struct parsed_server_input {
     struct {
       unsigned int keylen;
       char *key;
+      unsigned int siglen;
+      unsigned char *sig;
+      unsigned char *hashed_payload;
       char *username;
       unsigned char *iv;
       unsigned int encrypt_sz;
       unsigned char *encrypted_msg;
-    } pubkey_rqst;
+    } pubkey_response;
   };
 } server_parsed_t;
 
@@ -71,7 +74,7 @@ server_parsed_t *parse_server_input(packet_t *p);
 int parse_server_users(packet_t *packet, server_parsed_t *parsed);
 int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed);
 int parse_server_msg(packet_t *packet, server_parsed_t *parsed);
-int parse_server_pubkey_rqst(packet_t *packet, server_parsed_t *parsed);
+int parse_server_pubkey_response(packet_t *packet, server_parsed_t *parsed);
 int parse_server_error(packet_t *packet, server_parsed_t *parsed);
 void initialize_server_parsed(server_parsed_t *p);
 bool is_server_parsed_legal(server_parsed_t *p);

@@ -201,6 +201,10 @@ unsigned char *serialize_pubkey_request(client_parsed_t *p, char *key, unsigned 
   tmp += sizeof(unsigned int);
   memcpy(tmp, key, len);
   tmp += len;
+  memcpy(tmp, &p->pubkey_rqst.siglen, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  memcpy(tmp, p->pubkey_rqst.sig, p->pubkey_rqst.siglen);
+  tmp += p->pubkey_rqst.siglen;
   memcpy(tmp, p->pubkey_rqst.original, p->pubkey_rqst.original_sz);
 
   return payload;
@@ -208,14 +212,14 @@ unsigned char *serialize_pubkey_request(client_parsed_t *p, char *key, unsigned 
 
 /* creates a packet in response to a public key request */
 packet_t *gen_s_pubkey_rqst_packet(client_parsed_t *p, char *key, unsigned int len) {
-  unsigned int payload_sz;
+  unsigned int payloadsz;
   unsigned char *payload = NULL;
   packet_hdr_t *header = NULL;
 
-  payload_sz = p->pubkey_rqst.original_sz + sizeof(unsigned int) + len;
+  payloadsz = p->pubkey_rqst.original_sz + sizeof(unsigned int) + len + p->pubkey_rqst.siglen + sizeof(unsigned int);
 
-  header = initialize_header(S_META_PUBKEY_RESPONSE, payload_sz);
-  payload = serialize_pubkey_request(p, key, len, payload_sz);
+  header = initialize_header(S_META_PUBKEY_RESPONSE, payloadsz);
+  payload = serialize_pubkey_request(p, key, len, payloadsz);
   if (header == NULL || payload == NULL) {
     free(header);
     free(payload);

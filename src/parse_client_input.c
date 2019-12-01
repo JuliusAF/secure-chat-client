@@ -264,6 +264,13 @@ int parse_client_pubkey_rqst(packet_t *packet, client_parsed_t *parsed) {
   tmp = packet->payload;
   tmpend = tmp + size;
 
+  /* copy the signature of the packet to the parsed struct. To be used to verify the
+  validity of a server response to the request */
+  parsed->pubkey_rqst.siglen = packet->header->siglen;
+  parsed->pubkey_rqst.sig = safe_malloc(sizeof(unsigned char) * parsed->pubkey_rqst.siglen+1);
+  memcpy(parsed->pubkey_rqst.sig, packet->header->sig, parsed->pubkey_rqst.siglen);
+  parsed->pubkey_rqst.sig[parsed->pubkey_rqst.siglen] = '\0';
+
   /* check the packet contains the minimum required size */
   if ((tmp + USERNAME_MAX + IV_SIZE + sizeof(unsigned int)) > tmpend) {
     fprintf(stderr, "request packet fails minimum size check\n");
@@ -320,6 +327,7 @@ void initialize_client_parsed(client_parsed_t *p) {
       break;
     case C_META_PUBKEY_RQST:
       p->pubkey_rqst.username = NULL;
+      p->pubkey_rqst.sig = NULL;
       p->pubkey_rqst.original = NULL;
       break;
     default:
@@ -362,6 +370,7 @@ bool is_client_parsed_legal(client_parsed_t *p) {
       break;
     case C_META_PUBKEY_RQST:
       if (p->pubkey_rqst.username == NULL ||
+          p->pubkey_rqst.sig == NULL ||
           p->pubkey_rqst.original == NULL)
         return false;
       break;
@@ -402,6 +411,7 @@ void free_client_parsed(client_parsed_t *p) {
       break;
     case C_META_PUBKEY_RQST:
       free(p->pubkey_rqst.username);
+      free(p->pubkey_rqst.sig);
       free(p->pubkey_rqst.original);
       break;
     default:
