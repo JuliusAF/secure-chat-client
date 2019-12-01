@@ -379,6 +379,7 @@ void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
       break;
     case S_META_REGISTER_FAIL:
 			handle_server_log_fail(p, u, r);
+		case S_META_PUBKEY_RESPONSE:
       break;
     default:
       break;
@@ -404,6 +405,8 @@ void handle_server_users(server_parsed_t *p, user_t *u) {
 	}
 }
 
+/* verifies that the author of a public message matches the provided public key,
+and if it does prints the message to the interface */
 void handle_server_pubmsg(server_parsed_t *p, user_t *u) {
 	if (!is_server_parsed_legal(p) || u == NULL)
 		return;
@@ -416,6 +419,19 @@ void handle_server_pubmsg(server_parsed_t *p, user_t *u) {
 
 	write(STDOUT_FILENO, p->messages.message, p->messages.msglen);
 	write(STDOUT_FILENO, "\n", 1);
+}
+
+/* handles a server response to a prvious public key request. This function decrypts the message
+associated with the request, reencrypts it for both itself and the recipient, and sends the message
+back to the server */
+void handle_server_pubkey_rqst(server_parsed_t *p, user_t *u) {
+	unsigned int r_symketlen, s_symkeylen;
+	unsigned char *iv = NULL, *encrypt_key_r, *encrypt_key_s;
+	char decrypted[2000];
+	if (!is_server_parsed_legal(p) || u == NULL)
+		return;
+
+
 }
 
 /* this function handles packets sent from the server on register or login

@@ -52,6 +52,9 @@ server_parsed_t *parse_server_input(packet_t *p) {
     case S_META_REGISTER_FAIL:
       ret = parse_server_error(p, parsed);
       break;
+    case S_META_PUBKEY_RESPONSE:
+      ret = parse_server_pubkey_rqst(p, parsed);
+      break;
     default:
       ret = -1;
       break;
@@ -261,6 +264,69 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   return 1;
 }
 
+/* parses a server response to a public key request */
+int parse_server_pubkey_rqst(packet_t *packet, server_parsed_t *parsed) {
+  unsigned int size;
+  unsigned char *tmp, *tmpend;
+
+  if (packet == NULL || parsed == NULL)
+    return -1;
+
+  size = packet->header->pckt_sz;
+  tmp = packet->payload;
+  tmpend = tmp + size;
+
+  /* check if reading the size of the key causes buffer overflow, if not copy it */
+  if ((tmp + sizeof(unsigned int)) > tmpend)
+    return -1;
+  memcpy(&parsed->pubkey_rqst.keylen, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+
+  /* check if reading the key causes buffer overflow, if not copy it */
+  if ((tmp + parsed->pubkey_rqst.keylen) > tmpend)
+    return -1;
+  parsed->pubkey_rqst.key = safe_malloc(sizeof(unsigned char) * parsed->pubkey_rqst.keylen+1);
+  if (parsed->pubkey_rqst.key == NULL)
+    return -1;
+  memcpy(parsed->pubkey_rqst.key, tmp, parsed->pubkey_rqst.keylen);
+  parsed->pubkey_rqst.key[parsed->pubkey_rqst.keylen] = '\0';
+  tmp += parsed->pubkey_rqst.keylen;
+
+  /* check if reading the username causes buffer overflow, if not copy it */
+  if ((tmp + USERNAME_MAX) > tmpend)
+    return -1;
+  parsed->pubkey_rqst.username = safe_malloc(sizeof(char) * USERNAME_MAX+1);
+  if (parsed->pubkey_rqst.username == NULL)
+    return -1;
+  memset(parsed->pubkey_rqst.username, '\0', USERNAME_MAX+1);
+  memcpy(parsed->pubkey_rqst.username, tmp, USERNAME_MAX);
+  tmp += USERNAME_MAX;
+
+  /* checks if the next known required reads cause buffer overflow */
+  if ((tmp + IV_SIZE + sizeof(unsigned int)) > tmpend)
+    return -1;
+  parsed->pubkey_rqst.iv = safe_malloc(sizeof(unsigned char) * IV_SIZE+1);
+  if (parsed->pubkey_rqst.iv == NULL)
+    return -1;
+  memcpy(parsed->pubkey_rqst.iv, tmp, IV_SIZE);
+  parsed->pubkey_rqst.iv[IV_SIZE] = '\0';
+  tmp += IV_SIZE;
+
+  memcpy(&parsed->pubkey_rqst.encrypt_sz, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+
+  /* check if reading the encrypted message causes buffer overflow, if not copy it */
+  if ((tmp + parsed->pubkey_rqst.encrypt_sz) > tmpend)
+    return -1;
+  parsed->pubkey_rqst.encrypted_msg = safe_malloc(sizeof(unsigned char) * parsed->pubkey_rqst.encrypt_sz+1);
+  if (parsed->pubkey_rqst.encrypted_msg == NULL)
+    return -1;
+  memcpy(parsed->pubkey_rqst.encrypted_msg, tmp, parsed->pubkey_rqst.encrypt_sz);
+  parsed->pubkey_rqst.encrypted_msg[parsed->pubkey_rqst.encrypt_sz] = '\0';
+
+  return 1;
+}
+
 /* helper function that checks if an id is one of the error ids */
 static bool is_id_error(server_parsed_t *p) {
   if (p == NULL)
@@ -335,6 +401,12 @@ void initialize_server_parsed(server_parsed_t *p) {
     case S_META_REGISTER_FAIL:
       p->error_message = NULL;
       break;
+    case S_META_PUBKEY_RESPONSE:
+      p->pubkey_rqst.key = NULL;
+      p->pubkey_rqst.username = NULL;
+      p->pubkey_rqst.iv = NULL;
+      p->pubkey_rqst.encrypted_msg = NULL;
+      break;
     default:
       break;
   }
@@ -390,6 +462,13 @@ bool is_server_parsed_legal(server_parsed_t *p) {
       if (p->error_message == NULL)
         return false;
       break;
+    case S_META_PUBKEY_RESPONSE:
+      if (p->pubkey_rqst.key == NULL ||
+          p->pubkey_rqst.username == NULL ||
+          p->pubkey_rqst.iv == NULL ||
+          p->pubkey_rqst.encrypted_msg == NULL)
+        return false;
+      break;
     default:
       return false;
   }
@@ -433,6 +512,12 @@ void free_server_parsed(server_parsed_t *p) {
       break;
     case S_META_REGISTER_FAIL:
       free(p->error_message);
+      break;
+    case S_META_PUBKEY_RESPONSE:
+      free(p->pubkey_rqst.key);
+      free(p->pubkey_rqst.username);
+      free(p->pubkey_rqst.iv);
+      free(p->pubkey_rqst.encrypted_msg);
       break;
     default:
       break;
