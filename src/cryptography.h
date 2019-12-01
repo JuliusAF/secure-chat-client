@@ -13,6 +13,9 @@
 /* size of the init vector passed to the AES algorithm*/
 #define IV_SIZE 16
 
+/* size of a symmetric key for private message encryption */
+#define SYMKEY_SIZE 16
+
 /* size of the salt used for hashing passwords from clients */
 #define SALT_SIZE 32
 
@@ -44,5 +47,8 @@ int apply_aes(unsigned char *output, unsigned char *input, int size,
 
 unsigned int rsa_sign_sha256(EVP_PKEY *key, unsigned char *output, unsigned char* input, unsigned int inlen);
 bool rsa_verify_sha256(EVP_PKEY *key, unsigned char *s, unsigned char *i, unsigned int slen, unsigned int ilen);
+
+int apply_rsa_encrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigned char *in, unsigned char *out);
+int apply_rsa_decrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigned char *in, unsigned char *out);
 
 #endif

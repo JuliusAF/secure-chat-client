@@ -318,6 +318,12 @@ void initialize_client_parsed(client_parsed_t *p) {
       p->reg_packet.encrypted_keys = NULL;
       break;
     case C_MSG_PRIVMSG:
+      p->privmsg_packet.sig = NULL;
+      p->privmsg_packet.message = NULL;
+      p->privmsg_packet.recipient = NULL;
+      p->privmsg_packet.iv = NULL;
+      p->privmsg_packet.s_symkey = NULL;
+      p->privmsg_packet.r_symkey = NULL;
       break;
     case C_MSG_PUBMSG:
       p->pubmsg_packet.sig = NULL;
@@ -360,6 +366,13 @@ bool is_client_parsed_legal(client_parsed_t *p) {
         return false;
       break;
     case C_MSG_PRIVMSG:
+      if (p->privmsg_packet.sig == NULL ||
+          p->privmsg_packet.message == NULL ||
+          p->privmsg_packet.recipient == NULL ||
+          p->privmsg_packet.iv == NULL ||
+          p->privmsg_packet.s_symkey == NULL ||
+          p->privmsg_packet.r_symkey == NULL)
+        return false;
       break;
     case C_MSG_PUBMSG:
       if (p->pubmsg_packet.sig == NULL ||
@@ -402,6 +415,12 @@ void free_client_parsed(client_parsed_t *p) {
       free(p->reg_packet.encrypted_keys);
       break;
     case C_MSG_PRIVMSG:
+      free(p->privmsg_packet.sig);
+      free(p->privmsg_packet.message);
+      free(p->privmsg_packet.recipient);
+      free(p->privmsg_packet.iv);
+      free(p->privmsg_packet.s_symkey);
+      free(p->privmsg_packet.r_symkey);
       break;
     case C_MSG_PUBMSG:
       free(p->pubmsg_packet.sig);

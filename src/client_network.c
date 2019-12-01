@@ -364,7 +364,7 @@ unsigned char *serialize_pubkey_rqst(command_t *n, user_t *u, unsigned int *payl
   ret = create_formatted_msg(msg, n, u);
   if (ret < 1)
     return NULL;
-    
+
   /* encrypt the message and receive message length */
   encrypted_sz = apply_aes(encrypted_msg, (unsigned char *) msg,
                  strlen(msg), u->masterkey, iv, ENCRYPT);
@@ -410,6 +410,105 @@ packet_t *gen_c_pubkey_rqst_packet(command_t *n, user_t *u) {
   if (payload == NULL || header == NULL) {
     free(payload);
     free(header);
+    return NULL;
+  }
+
+  return pack_packet(header, payload);
+}
+
+/* handles the serialization of a private message packet. It decrypts the encrypted message
+to encrypt it again with a shared symmetric key and adds that to the payload. Stores the calculated
+size of the payload in the third argument */
+unsigned char *serialize_privmsg(server_parsed_t *p, user_t *u, unsigned int *payload_sz) {
+  const unsigned int max = 2000;
+  unsigned char *payload = NULL, *iv = NULL, *symkey = NULL, *tmp,
+  s_symkey[max], r_symkey[max], encrypted_msg[max], decrypted[max];
+  int decrypt_sz, s_symkeylen, r_symkeylen, encryptedlen;
+
+  /*  decrypt message from server */
+  memset(decrypted, '\0', max);
+  decrypt_sz = apply_aes( decrypted, p->pubkey_response.encrypted_msg,
+												 p->pubkey_response.encrypt_sz, u->masterkey, p->pubkey_response.iv, DECRYPT);
+	if (decrypt_sz < 0)
+		return NULL;
+
+  /* create the variables needed to encrypt the message again, this time with a symmetric key
+  that both parties will receive a version of to decrypt */
+  iv = create_rand_salt(IV_SIZE);
+  if (iv == NULL)
+    goto cleanup;
+
+  symkey = create_rand_salt(SYMKEY_SIZE);
+  if (symkey == NULL)
+    goto cleanup;
+
+  /* encrypt the message with AES-128-CBC using the created symmetric key and initialization vector */
+  memset(encrypted_msg, '\0', max);
+  encryptedlen = apply_aes(encrypted_msg, decrypted, decrypt_sz, symkey, iv, ENCRYPT);
+  if (encryptedlen < 0)
+    goto cleanup;
+
+  /* encrypt the symmetric key with the sender's public key */
+  s_symkeylen = apply_rsa_encrypt(u->rsa_keys->pubkey, u->rsa_keys->publen, SYMKEY_SIZE, symkey, s_symkey);
+  if (s_symkeylen < 0)
+    goto cleanup;
+
+  /* encrypt the symmetric key with the recipient's public key */
+  r_symkeylen = apply_rsa_encrypt(p->pubkey_response.key, p->pubkey_response.keylen, SYMKEY_SIZE, symkey, r_symkey);
+  if (r_symkeylen < 0)
+    goto cleanup;
+
+  /* calculate the size of the packet as described in the README.md */
+  *payload_sz = sizeof(unsigned int) + u->rsa_keys->publen + sizeof(unsigned int) + encryptedlen +
+                USERNAME_MAX + IV_SIZE + sizeof(unsigned int) + s_symkeylen + sizeof(unsigned int) + r_symkeylen;
+  payload = safe_malloc(sizeof(unsigned char) * *payload_sz);
+  if (payload == NULL)
+    goto cleanup;
+
+  tmp = payload;
+
+  memcpy(tmp, &u->rsa_keys->publen, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  memcpy(tmp, u->rsa_keys->pubkey, u->rsa_keys->publen);
+  tmp += u->rsa_keys->publen;
+  memcpy(tmp, &encryptedlen, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  memcpy(tmp, encrypted_msg, encryptedlen);
+  tmp += encryptedlen;
+  memset(tmp, '\0', USERNAME_MAX);
+  memcpy(tmp, p->pubkey_response.username, strlen(p->pubkey_response.username));
+  tmp += USERNAME_MAX;
+  memcpy(tmp, iv, IV_SIZE);
+  tmp += IV_SIZE;
+  memcpy(tmp, &s_symkeylen, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  memcpy(tmp, s_symkey, s_symkeylen);
+  tmp += s_symkeylen;
+  memcpy(tmp, &r_symkeylen, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  memcpy(tmp, r_symkey, r_symkeylen);
+
+  printf("successfully reaches\n");
+
+  cleanup:
+
+  free(iv);
+  free(symkey);
+  return payload;
+}
+
+/* creates the actual privat message that is to be stored server side and sent to
+the appropriate people */
+packet_t *gen_c_privmsg_packet(server_parsed_t *p, user_t *u) {
+  unsigned int payload_sz;
+  unsigned char *payload = NULL;
+  packet_hdr_t *header = NULL;
+
+  payload = serialize_privmsg(p, u, &payload_sz);
+  header = initialize_header(C_MSG_PRIVMSG, payload_sz);
+  if (header == NULL || payload == NULL) {
+    free(header);
+    free(payload);
     return NULL;
   }
 

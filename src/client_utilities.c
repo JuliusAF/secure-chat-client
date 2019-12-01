@@ -431,15 +431,25 @@ void handle_server_pubmsg(server_parsed_t *p, user_t *u) {
 associated with the request, reencrypts it for both itself and the recipient, and sends the message
 back to the server */
 void handle_server_pubkey_response(server_parsed_t *p, user_t *u) {
-	unsigned int r_symketlen, s_symkeylen;
-	unsigned char *iv = NULL, *encrypt_key_r, *encrypt_key_s;
-	char decrypted[2000];
+	int ret;
+	packet_t *packet = NULL;
+
 	if (!is_server_parsed_legal(p) || u == NULL)
 		return;
 
 	if (!verify_client_payload(u->rsa_keys->pubkey, u->rsa_keys->publen, p->pubkey_response.sig,
 			p->pubkey_response.siglen, p->pubkey_response.hashed_payload)) {
 		fprintf(stderr, "authors of packet don't match\n");
+	}
+	
+	packet = gen_c_privmsg_packet(p, u);
+	if (packet == NULL)
+		return;
+
+	sign_client_packet(packet, u);
+	ret = send_packet_over_socket(u->ssl, u->connfd, packet);
+	if (ret < 1)	{
+		fprintf(stderr, "failed to send user /users packet\n");
 	}
 
 }

@@ -44,6 +44,20 @@ typedef struct parsed_client_input {
       unsigned int original_sz;
       unsigned char *original;
     } pubkey_rqst;
+    /* a private message contains the same items as a public message, as well as
+    the recipient name, an initialization vector, and two symmetric keys */
+    struct {
+      unsigned int siglen;
+      unsigned char *sig;
+      unsigned int msg_sz;
+      unsigned char *message;
+      char *recipient;
+      unsigned char *iv;
+      unsigned int s_symkeylen;
+      unsigned char *s_symkey;
+      unsigned int r_symkeylen;
+      unsigned char *r_symkey;
+    } privmsg_packet;
   };
 
 } client_parsed_t;

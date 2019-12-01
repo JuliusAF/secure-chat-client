@@ -327,3 +327,52 @@ bool rsa_verify_sha256(EVP_PKEY *key, unsigned char *s, unsigned char *i, unsign
   EVP_MD_CTX_free(ctx);
   return (ret == 1) ? true : false;
 }
+
+/* encrypts a given message with a RSA public key */
+int apply_rsa_encrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigned char *in, unsigned char *out) {
+  int ret = -1;
+  RSA *rsa = NULL;
+  BIO *bio = NULL;
+
+  bio = BIO_new_mem_buf(pkey, plen);
+  if (bio == NULL)
+    goto cleanup;
+
+  rsa = PEM_read_bio_RSAPublicKey(bio, NULL, NULL, NULL);
+  if (rsa == NULL)
+    goto cleanup;
+
+  ret = RSA_public_encrypt(inlen, in, out, rsa, RSA_PKCS1_OAEP_PADDING);
+  if (ret < 0)
+    ERR_print_errors_fp(stderr);
+
+  cleanup:
+
+  BIO_free_all(bio);
+  RSA_free(rsa);
+  return ret;
+}
+
+int apply_rsa_decrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigned char *in, unsigned char *out) {
+  int ret = -1;
+  RSA *rsa = NULL;
+  BIO *bio = NULL;
+
+  bio = BIO_new_mem_buf(pkey, plen);
+  if (bio == NULL)
+    goto cleanup;
+
+  rsa = PEM_read_bio_RSAPrivateKey(bio, NULL, NULL, NULL);
+  if (rsa == NULL)
+    goto cleanup;
+
+  ret = RSA_public_decrypt(inlen, in, out, rsa, RSA_PKCS1_OAEP_PADDING);
+  if (ret < 0)
+    ERR_print_errors_fp(stderr);
+
+  cleanup:
+
+  BIO_free_all(bio);
+  RSA_free(rsa);
+  return ret;
+}
