@@ -311,7 +311,6 @@ Returns:
 1 on success
 0 on sqlite3 failure or memory failure
 -1 on failure pertaining to client account */
-
 int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err_msg) {
   char *sql, *name, *pubkey, *pubkey1;
   unsigned char *pass, *iv, *keys,
@@ -415,6 +414,73 @@ int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err
 
   free(salt);
   free(hashed_pass);
+  sqlite3_finalize(res);
+  sqlite3_close(db);
+  return ret;
+}
+
+int handle_db_privmsg(client_parsed_t *parsed, client_t *client_info, char *error_msg) {
+  char *sql;
+  int ret = -1, rc, step;
+  sqlite3_stmt *res = NULL;
+  sqlite3 *db = NULL;
+
+  if(!is_client_parsed_legal(parsed))
+    return 0;
+
+  db = open_database();
+  if (db == NULL)
+    return 0;
+
+  /* check if the recipient exists in the database */
+  sql = "SELECT * FROM USERS WHERE USERNAME = ?1";
+
+  rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
+  if (rc == SQLITE_OK) {
+    sqlite3_bind_text(res, 1, parsed->privmsg_packet.recipient, -1, SQLITE_STATIC);
+  }
+  else {
+    fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
+    ret = 0;
+    goto cleanup;
+  }
+
+  step = sqlite3_step(res);
+  if (step != SQLITE_ROW) {
+    strcpy(error_msg, "there is no user by this name");
+    goto cleanup;
+  }
+  sqlite3_finalize(res);
+
+  /* insert the fields of a private message into the database */
+  sql = "INSERT INTO MESSAGES VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)";
+
+  rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
+  if (rc == SQLITE_OK) {
+    sqlite3_bind_text(res, 1, client_info->username, -1, SQLITE_STATIC);
+    sqlite3_bind_text(res, 2, parsed->privmsg_packet.recipient, -1, SQLITE_STATIC);
+    sqlite3_bind_blob(res, 3, parsed->privmsg_packet.message, parsed->privmsg_packet.msg_sz, SQLITE_STATIC);
+    sqlite3_bind_blob(res, 4, parsed->privmsg_packet.sig, parsed->privmsg_packet.siglen, SQLITE_STATIC);
+    sqlite3_bind_blob(res, 5, parsed->privmsg_packet.iv, IV_SIZE, SQLITE_STATIC);
+    sqlite3_bind_blob(res, 6, parsed->privmsg_packet.s_symkey, parsed->privmsg_packet.s_symkeylen, SQLITE_STATIC);
+    sqlite3_bind_blob(res, 7, parsed->privmsg_packet.r_symkey, parsed->privmsg_packet.r_symkeylen, SQLITE_STATIC);
+  }
+  else {
+    fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
+    ret = 0;
+    goto cleanup;
+  }
+
+  step = sqlite3_step(res);
+  if (step != SQLITE_DONE) {
+    fprintf(stderr, "Failed to execute statement: %s \n", sqlite3_errmsg(db));
+    ret = 0;
+    goto cleanup;
+  }
+
+  ret = 1;
+  cleanup:
+
   sqlite3_finalize(res);
   sqlite3_close(db);
   return ret;
@@ -626,9 +692,9 @@ msg_queue_t *fetch_db_messages(client_t *client_info) {
     goto cleanup;
 
   while (step == SQLITE_ROW) {
-    rowid = (signed long long) sqlite3_column_int64(res, 0);
     cmps = assign_msg_components(res);
     if (cmps != NULL) {
+      rowid = (signed long long) sqlite3_column_int64(res, 0);
       ret = add_msg_component(queue, cmps);
       if (ret < 0) {
         fprintf(stderr, "enqueue message components failed\n");

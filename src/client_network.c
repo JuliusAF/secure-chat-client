@@ -488,8 +488,6 @@ unsigned char *serialize_privmsg(server_parsed_t *p, user_t *u, unsigned int *pa
   tmp += sizeof(unsigned int);
   memcpy(tmp, r_symkey, r_symkeylen);
 
-  printf("successfully reaches\n");
-
   cleanup:
 
   free(iv);

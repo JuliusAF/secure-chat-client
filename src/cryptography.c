@@ -328,7 +328,7 @@ bool rsa_verify_sha256(EVP_PKEY *key, unsigned char *s, unsigned char *i, unsign
   return (ret == 1) ? true : false;
 }
 
-/* encrypts a given message with a RSA public key */
+/* encrypts a given message with a RSA public key in memory in PEM format */
 int apply_rsa_encrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigned char *in, unsigned char *out) {
   int ret = -1;
   RSA *rsa = NULL;
@@ -353,6 +353,7 @@ int apply_rsa_encrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigne
   return ret;
 }
 
+/* decrypts a given rsa encrypted buffer with the provided private key in PEM format */
 int apply_rsa_decrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigned char *in, unsigned char *out) {
   int ret = -1;
   RSA *rsa = NULL;
@@ -366,7 +367,7 @@ int apply_rsa_decrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigne
   if (rsa == NULL)
     goto cleanup;
 
-  ret = RSA_public_decrypt(inlen, in, out, rsa, RSA_PKCS1_OAEP_PADDING);
+  ret = RSA_private_decrypt(inlen, in, out, rsa, RSA_PKCS1_OAEP_PADDING);
   if (ret < 0)
     ERR_print_errors_fp(stderr);
 

@@ -33,6 +33,7 @@ server_parsed_t *parse_server_input(packet_t *p) {
       ret = parse_server_msg(p, parsed);
       break;
     case S_MSG_PRIVMSG:
+      ret = parse_server_msg(p, parsed);
       break;
     case S_MSG_USERS:
       ret = parse_server_users(p, parsed);
@@ -163,7 +164,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   tmp += sizeof(unsigned int);
   if((tmp + parsed->messages.siglen) > tmpend)
     return -1;
-
+    
   parsed->messages.sig = safe_malloc(sizeof(unsigned char) * parsed->messages.siglen+1);
   if (parsed->messages.sig == NULL)
     return -1;
@@ -213,6 +214,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   if (parsed->id == S_MSG_PRIVMSG) {
     /* input the recipient into the appropriate variable. This field has a constant
     size defined as USERNAME_MAX */
+
     if ((tmp + USERNAME_MAX) > tmpend)
       return -1;
     parsed->messages.recipient = safe_malloc(sizeof(char) * USERNAME_MAX+1);
@@ -233,7 +235,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
     tmp += IV_SIZE;
 
     /* stores the symmetric key encrypted for the sender */
-    if ((tmp + sizeof(unsigned int)) > tmp)
+    if ((tmp + sizeof(unsigned int)) > tmpend)
       return -1;
     memcpy(&parsed->messages.s_symkeylen, tmp, sizeof(unsigned int));
     tmp += sizeof(unsigned int);
@@ -248,7 +250,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
     tmp += parsed->messages.s_symkeylen;
 
     /* stores the symmetric key that was encrypted for the recipient */
-    if ((tmp + sizeof(unsigned int)) > tmp)
+    if ((tmp + sizeof(unsigned int)) > tmpend)
       return -1;
     memcpy(&parsed->messages.r_symkeylen, tmp, sizeof(unsigned int));
     tmp += sizeof(unsigned int);

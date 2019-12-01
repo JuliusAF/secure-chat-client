@@ -169,15 +169,17 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
       }
       else if (!is_client_sig_good(packet, client_info)) {
         fprintf(stderr, "bad packet signature\n");
+        packet = gen_s_error_packet(S_MSG_GENERIC_ERR, "failed to verify author of request");
+        send_packet_over_socket(ssl, connfd, packet);
         goto cleanup;
       }
 
-      printf("packet id: %d\n", packet->header->pckt_id);
       parsed = parse_client_input(packet);
-      if (parsed == NULL)
+      if (parsed == NULL) {
+        packet = gen_s_error_packet(S_MSG_GENERIC_ERR, "couldn't process request");
+        send_packet_over_socket(ssl, connfd, packet);
         goto cleanup;
-
-      printf("reaches handle function\n");
+      }
 
       handle_client_input(parsed, client_info, to_parent[1]);
 
@@ -269,6 +271,7 @@ void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd) 
       handle_db_msg_update(client_info);
       break;
     case C_MSG_PRIVMSG:
+      handle_client_privmsg(p, client_info, pipefd);
       break;
     case C_MSG_PUBMSG:
       handle_client_pubmsg(p, client_info, pipefd);
@@ -433,8 +436,24 @@ void handle_client_pubkey_rqst(client_parsed_t *p, client_t *client_info) {
   free(fetched);
 }
 
+void handle_client_privmsg(client_parsed_t *p, client_t *client_info, int pipefd) {
+  char err[200] = "";
+  int ret;
+  packet_t *packet;
 
+  if (!is_client_parsed_legal(p) || client_info == NULL)
+    return;
 
+  ret = handle_db_privmsg(p, client_info, err);
+  if (ret == 0)
+    fprintf(stderr, "pubmsg database failure\n");
+  else if (ret < 0) {
+    packet = gen_s_error_packet(S_MSG_GENERIC_ERR, err);
+    send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
+  }
+
+  write(pipefd, PIPE_MSG_UPDATE, PIPE_MSG_LEN);
+}
 
 /* this function deals with a database message update. It searches for all
 messages written to the database since last update (using the fetch_db_messages() function)

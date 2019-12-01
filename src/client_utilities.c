@@ -201,7 +201,7 @@ void handle_user_register(command_t *node, user_t *user, request_t *request) {
 	the server */
 	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
 	if (ret < 1)	{
-		fprintf(stderr, "failed to send user register packet\n");
+		fprintf(stderr, "failed to send register request\n");
 	}
 	else
 		request->is_request_active = true;
@@ -245,7 +245,7 @@ void handle_user_login(command_t *node, user_t *user, request_t *request) {
 	the server */
 	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
 	if (ret < 1)	{
-		fprintf(stderr, "failed to send user register packet\n");
+		fprintf(stderr, "failed to send login request\n");
 	}
 	else
 		request->is_request_active = true;
@@ -274,7 +274,7 @@ void handle_user_users(command_t *node, user_t *user) {
 	sign_client_packet(packet, user);
 	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
 	if (ret < 1)	{
-		fprintf(stderr, "failed to send user /users packet\n");
+		fprintf(stderr, "failed to send user request\n");
 	}
 
 }
@@ -299,7 +299,7 @@ void handle_user_pubmsg(command_t *node, user_t *user) {
 	sign_client_packet(packet, user);
 	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
 	if (ret < 1)	{
-		fprintf(stderr, "failed to send user /users packet\n");
+		fprintf(stderr, "failed to send public message\n");
 	}
 
 }
@@ -329,7 +329,7 @@ void handle_user_privmsg(command_t *node, user_t *user) {
 	sign_client_packet(packet, user);
 	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
 	if (ret < 1)	{
-		fprintf(stderr, "failed to send user /users packet\n");
+		fprintf(stderr, "failed to send private message\n");
 	}
 }
 
@@ -347,10 +347,6 @@ void print_error(char *s) {
 
 
 
-
-
-
-
 /* these functions deal with input from the server. This includes storing
 data obtained from the server if necessary and printing messages */
 
@@ -365,6 +361,7 @@ void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
 			handle_server_pubmsg(p, u);
       break;
     case S_MSG_PRIVMSG:
+			handle_server_privmsg(p, u);
       break;
     case S_MSG_USERS:
 			handle_server_users(p, u);
@@ -414,9 +411,9 @@ void handle_server_users(server_parsed_t *p, user_t *u) {
 /* verifies that the author of a public message matches the provided public key,
 and if it does prints the message to the interface */
 void handle_server_pubmsg(server_parsed_t *p, user_t *u) {
-	if (!is_server_parsed_legal(p) || u == NULL)
+	if (u == NULL)
 		return;
-
+	/* verify the signature of the original payload */
 	if (!verify_client_payload(p->messages.pubkey, p->messages.publen, p->messages.sig,
 			p->messages.siglen, p->messages.hashed_payload)) {
 		fprintf(stderr, "author of message doesn't match\n");
@@ -434,14 +431,12 @@ void handle_server_pubkey_response(server_parsed_t *p, user_t *u) {
 	int ret;
 	packet_t *packet = NULL;
 
-	if (!is_server_parsed_legal(p) || u == NULL)
-		return;
-
+	/* verify the information received from the server that was sent from the client was not changed */
 	if (!verify_client_payload(u->rsa_keys->pubkey, u->rsa_keys->publen, p->pubkey_response.sig,
 			p->pubkey_response.siglen, p->pubkey_response.hashed_payload)) {
 		fprintf(stderr, "authors of packet don't match\n");
 	}
-	
+
 	packet = gen_c_privmsg_packet(p, u);
 	if (packet == NULL)
 		return;
@@ -454,6 +449,47 @@ void handle_server_pubkey_response(server_parsed_t *p, user_t *u) {
 
 }
 
+/* this messages handles a private message from the server. It decrypts the symmetric key
+that (should) belong to it and uses it to decrypt the message with AES-128-CBC and the
+initialization vector provided */
+void handle_server_privmsg(server_parsed_t *p, user_t *u) {
+	unsigned char decrypted_key[500], *encrypted_key;
+	char decrypted_msg[MAX_PACKET_SIZE] = "";
+	int decrypted_msglen, decrypted_keylen;
+	unsigned int encrypted_keylen;
+	/* verify the signature of the original payload */
+	if (!verify_client_payload(p->messages.pubkey, p->messages.publen, p->messages.sig,
+			p->messages.siglen, p->messages.hashed_payload)) {
+		fprintf(stderr, "author of message doesn't match\n");
+		return;
+	}
+
+	/* check if logged in user is the recipient of the message. If he is, use the recipients
+	symmetric key, otherwise use the senders */
+	if(strncmp(u->username, p->messages.recipient, USERNAME_MAX) == 0) {
+		encrypted_keylen = p->messages.r_symkeylen;
+		encrypted_key = p->messages.r_symkey;
+	}
+	else {
+		encrypted_keylen = p->messages.s_symkeylen;
+		encrypted_key = p->messages.s_symkey;
+	}
+
+	decrypted_keylen = apply_rsa_decrypt(u->rsa_keys->privkey, u->rsa_keys->privlen, encrypted_keylen,
+																			encrypted_key, decrypted_key);
+	if (decrypted_keylen < 0)
+		return;
+	decrypted_key[decrypted_keylen] = '\0';
+
+	decrypted_msglen = apply_aes( (unsigned char *) decrypted_msg, p->messages.message, p->messages.msglen,
+															 decrypted_key, p->messages.iv, DECRYPT);
+	if (decrypted_msglen < 0)
+		return;
+
+	write(STDOUT_FILENO, decrypted_msg, decrypted_msglen);
+	write(STDOUT_FILENO, "\n", 1);
+}
+
 /* this function handles packets sent from the server on register or login
 success. In both these instances the same data is returned, so this function can.
 This function checks for any errors, and if there are none sets the client to logged
@@ -464,9 +500,6 @@ void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
 	*masterkey;
 	keypair_t *keys = NULL;
 
-	if (!is_server_parsed_legal(p) ||
-			u == NULL || r == NULL)
-		return;
 	if (!r->is_request_active) {
 		fprintf(stderr, "No active register request\n");
 		return;

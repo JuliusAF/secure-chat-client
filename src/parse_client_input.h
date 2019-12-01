@@ -10,7 +10,7 @@ typedef struct parsed_client_input {
 
   union {
     /* when sending a registration packet to the server, the following fields
-    must be sent */
+    must be received */
     struct {
       char *username;
       unsigned char *hash_password;
@@ -71,6 +71,7 @@ int parse_client_login(packet_t *packet, client_parsed_t *parsed);
 int parse_client_users(packet_t *packet, client_parsed_t *parsed);
 int parse_client_pubmsg(packet_t *packet, client_parsed_t *parsed);
 int parse_client_pubkey_rqst(packet_t *packet, client_parsed_t *parsed);
+int parse_client_privmsg(packet_t *packet, client_parsed_t *parsed);
 void initialize_client_parsed(client_parsed_t *p);
 bool is_client_parsed_legal(client_parsed_t *p);
 void free_client_parsed(client_parsed_t *p);

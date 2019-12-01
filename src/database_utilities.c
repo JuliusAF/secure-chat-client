@@ -67,7 +67,7 @@ msg_components_t *assign_msg_components(sqlite3_stmt *res) {
       return NULL;
     }
     m->s_symkeylen = sqlite3_column_bytes(res, 6);
-    m->s_symkeylen = sqlite3_column_bytes(res, 7);
+    m->r_symkeylen = sqlite3_column_bytes(res, 7);
 
     m->recipient = safe_malloc(sizeof(char) * m->reclen+1);
     /* IV size is constant, defined in IV_SIZE */

@@ -23,7 +23,6 @@ client_parsed_t *parse_client_input(packet_t *p) {
   }
 
   parsed = safe_malloc(sizeof(client_parsed_t));
-
   if (parsed == NULL)
     return NULL;
 
@@ -43,6 +42,7 @@ client_parsed_t *parse_client_input(packet_t *p) {
       ret = parse_client_register(p, parsed);
       break;
     case C_MSG_PRIVMSG:
+      ret = parse_client_privmsg(p, parsed);
       break;
     case C_MSG_PUBMSG:
       ret = parse_client_pubmsg(p, parsed);
@@ -75,12 +75,8 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
   unsigned char *payload, *tmp, *tmpend;
   unsigned int total, known_sz;
 
-  if (!is_packet_legal(packet) || parsed == NULL ||
-      parsed->id != C_MSG_REGISTER)
-    return -1;
-
   /* checks that the packet payload size is at least as large as the known size
-  reuirements. (there are some fixed sizes to the packet, and some of variable size )*/
+  requirements. (there are some fixed sizes to the packet, and some of variable size )*/
   known_sz = USERNAME_MAX + SHA256_DIGEST_LENGTH + IV_SIZE + (sizeof(unsigned int) * 2);
   if (known_sz > packet->header->pckt_sz) {
     fprintf(stderr, "register packet fails to meet minumum size requirement\n");
@@ -138,8 +134,7 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
     return -1;
   }
 
-  parsed->reg_packet.encrypted_keys =
-    safe_malloc(sizeof(unsigned char) * parsed->reg_packet.encrypt_sz+1);
+  parsed->reg_packet.encrypted_keys = safe_malloc(sizeof(unsigned char) * parsed->reg_packet.encrypt_sz+1);
   if (parsed->reg_packet.encrypted_keys == NULL)
     return -1;
 
@@ -155,10 +150,6 @@ Returns:
 -1 on failure */
 int parse_client_login(packet_t *packet, client_parsed_t *parsed) {
   unsigned char *tmp;
-
-  if (!is_packet_legal(packet) || parsed == NULL ||
-      parsed->id != C_MSG_LOGIN)
-    return -1;
 
   /* a login request packet is a constant size. If it isn't something is wrong */
   if (packet->header->pckt_sz != LOGIN_REQUEST_SIZE)
@@ -182,13 +173,15 @@ int parse_client_login(packet_t *packet, client_parsed_t *parsed) {
 }
 
 /* parses a /users request from the client, ensuring that the payload is correct etc.
+It places nothing into the parsed struct as no data for this request is required, other than to
+verify the signature
 Returns:
 1 on success
 -1 on failure */
 int parse_client_users(packet_t *packet, client_parsed_t *parsed) {
   char msg[USERS_MSG_SIZE+1];
 
-  if (!is_packet_legal(packet) || parsed == NULL)
+  if (parsed == NULL)
     return -1;
 
   if (packet->header->pckt_sz != USERS_MSG_SIZE)
@@ -213,13 +206,14 @@ int parse_client_pubmsg(packet_t *packet, client_parsed_t *parsed) {
   unsigned int publen, msglen, total;
   unsigned char *tmp, *tmpend;
 
-  if (!is_packet_legal(packet) || parsed == NULL)
-    return -1;
-
   tmp = packet->payload;
   total = packet->header->pckt_sz;
   tmpend = tmp + total;
 
+  /* this reads the size of the key and skips over it, as it is not needed on the
+  server side */
+  if ((tmp + sizeof(unsigned int)) > tmpend)
+    return -1;
   memcpy(&publen, tmp, sizeof(unsigned int));
   tmp += (sizeof(unsigned int) + publen);
   /* check if the length of public key and size of length exceeds the pointer limit */
@@ -258,9 +252,6 @@ int parse_client_pubkey_rqst(packet_t *packet, client_parsed_t *parsed) {
   unsigned char *tmp, *tmpend;
   unsigned int size;
 
-  if (!is_packet_legal(packet) || parsed == NULL)
-    return -1;
-
   size = packet->header->pckt_sz;
   tmp = packet->payload;
   tmpend = tmp + size;
@@ -292,6 +283,102 @@ int parse_client_pubkey_rqst(packet_t *packet, client_parsed_t *parsed) {
   memcpy(parsed->pubkey_rqst.original, packet->payload, size);
   parsed->pubkey_rqst.original[size] = '\0';
   parsed->pubkey_rqst.original_sz = size;
+
+  return 1;
+}
+
+/* this function parses a private message packet
+Returns:
+1 on success
+-1 on failure */
+int parse_client_privmsg(packet_t *packet, client_parsed_t *parsed) {
+  unsigned char *tmp, *tmpend;
+  unsigned int size, keylen;
+
+  size = packet->header->pckt_sz;
+  tmp = packet->payload;
+  tmpend = tmp + size;
+
+  /* copy signature and its size into the parse struct */
+  parsed->privmsg_packet.siglen = packet->header->siglen;
+  parsed->privmsg_packet.sig = safe_malloc(sizeof(unsigned char) * parsed->privmsg_packet.siglen+1);
+  if (parsed->privmsg_packet.sig == NULL)
+    return -1;
+  memcpy(parsed->privmsg_packet.sig, packet->header->sig, parsed->privmsg_packet.siglen);
+  parsed->privmsg_packet.sig[parsed->privmsg_packet.siglen] = '\0';
+
+  /* read the size of the key and skip over it. It is not needed on the server side */
+  if ((tmp + sizeof(unsigned int)) > tmpend)
+    return -1;
+  memcpy(&keylen, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  if ((tmp + keylen) > tmpend)
+    return -1;
+  tmp += keylen;
+
+  /* reads the message into the parse struct */
+  if ((tmp + sizeof(unsigned int)) > tmpend)
+    return -1;
+  memcpy(&parsed->privmsg_packet.msg_sz, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+
+  if ((tmp + parsed->privmsg_packet.msg_sz) > tmpend)
+    return -1;
+  parsed->privmsg_packet.message = safe_malloc(sizeof(unsigned char) * parsed->privmsg_packet.msg_sz+1);
+  if (parsed->privmsg_packet.message == NULL)
+    return -1;
+  memcpy(parsed->privmsg_packet.message, tmp, parsed->privmsg_packet.msg_sz);
+  parsed->privmsg_packet.message[parsed->privmsg_packet.msg_sz] = '\0';
+  tmp += parsed->privmsg_packet.msg_sz;
+
+  /* reads the recipient into the struct */
+  if ((tmp + USERNAME_MAX) > tmpend)
+    return -1;
+  parsed->privmsg_packet.recipient = safe_malloc(sizeof(char) * USERNAME_MAX+1);
+  if (parsed->privmsg_packet.recipient == NULL)
+    return -1;
+  memset(parsed->privmsg_packet.recipient, '\0', USERNAME_MAX+1);
+  memcpy(parsed->privmsg_packet.recipient, tmp, USERNAME_MAX);
+  tmp += USERNAME_MAX;
+
+  /* reads the initialization vector into the struct */
+  if ((tmp + IV_SIZE) > tmpend)
+    return -1;
+  parsed->privmsg_packet.iv = safe_malloc(sizeof(unsigned char) * IV_SIZE+1);
+  if (parsed->privmsg_packet.iv == NULL)
+    return -1;
+  memcpy(parsed->privmsg_packet.iv, tmp, IV_SIZE);
+  parsed->privmsg_packet.iv[IV_SIZE] = '\0';
+  tmp += IV_SIZE;
+
+  /* read the symmetric key encrypted for the sender */
+  if ((tmp + sizeof(unsigned int)) > tmpend)
+    return -1;
+  memcpy(&parsed->privmsg_packet.s_symkeylen, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+
+  if ((tmp + parsed->privmsg_packet.s_symkeylen) > tmpend)
+    return -1;
+  parsed->privmsg_packet.s_symkey = safe_malloc(sizeof(unsigned char) * parsed->privmsg_packet.s_symkeylen+1);
+  if (parsed->privmsg_packet.s_symkey == NULL)
+    return -1;
+  memcpy(parsed->privmsg_packet.s_symkey, tmp, parsed->privmsg_packet.s_symkeylen);
+  parsed->privmsg_packet.s_symkey[parsed->privmsg_packet.s_symkeylen] = '\0';
+  tmp += parsed->privmsg_packet.s_symkeylen;
+
+  /* read the symmetric key encrypted for the recipient */
+  if ((tmp + sizeof(unsigned int)) > tmpend)
+    return -1;
+  memcpy(&parsed->privmsg_packet.r_symkeylen, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+
+  if ((tmp + parsed->privmsg_packet.r_symkeylen) > tmpend)
+    return -1;
+  parsed->privmsg_packet.r_symkey = safe_malloc(sizeof(unsigned char) * parsed->privmsg_packet.r_symkeylen+1);
+  if (parsed->privmsg_packet.r_symkey == NULL)
+    return -1;
+  memcpy(parsed->privmsg_packet.r_symkey, tmp, parsed->privmsg_packet.r_symkeylen);
+  parsed->privmsg_packet.r_symkey[parsed->privmsg_packet.r_symkeylen] = '\0';
 
   return 1;
 }
