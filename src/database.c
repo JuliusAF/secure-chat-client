@@ -652,7 +652,6 @@ a char array and returns it. Each username is delimited by a space and the array
 null terminated, meaning the size can be found with strlen. The number of maximum
 clients is defined in server_utilities.h, and can be used to control how many
 times step is called. */
-
 char *fetch_db_users() {
   const int size = 2000;
   char *sql;
@@ -700,6 +699,47 @@ char *fetch_db_users() {
   if (strlen(fetched) > 0) {
     fetched[strlen(fetched)-1] = '\0';
   }
+
+  sqlite3_finalize(res);
+  sqlite3_close(db);
+  return fetched;
+}
+
+char *fetch_db_pubkey(client_t *client_info, unsigned int *fetchlen) {
+  const char *tmp;
+  int rc, step;
+  char *sql, *fetched = NULL;
+  sqlite3_stmt *res = NULL;
+  sqlite3 *db = NULL;
+
+  db = open_database();
+  if (db == NULL)
+    return NULL;
+
+  sql = "SELECT PUBKEY FROM USERS WHERE USERNAME = ?1";
+
+  rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
+  if (rc == SQLITE_OK) {
+    sqlite3_bind_text(res, 1, client_info->username, -1, SQLITE_STATIC);
+  }
+  else {
+    fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
+    goto cleanup;
+  }
+
+  step = sqlite3_step(res);
+  if (step == SQLITE_ROW) {
+    *fetchlen = (unsigned int) sqlite3_column_bytes(res, 0);
+    fetched = safe_malloc(sizeof(char) * *fetchlen+1);
+    if (fetched == NULL)
+      goto cleanup;
+
+    tmp = sqlite3_column_blob(res, 0);
+    memcpy(fetched, tmp, *fetchlen);
+    fetched[*fetchlen] = '\0';
+  }
+
+  cleanup:
 
   sqlite3_finalize(res);
   sqlite3_close(db);

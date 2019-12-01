@@ -35,6 +35,13 @@ typedef struct parsed_client_input {
       unsigned int msg_sz;
       char *message;
     } pubmsg_packet;
+    /* a request for another users public key also includes the encrypted message and iv to make
+    responding to the return message on the client side easier. saves  */
+    struct {
+      char *username;
+      unsigned int original_sz;
+      unsigned char *original;
+    } pubkey_rqst;
   };
 
 } client_parsed_t;
@@ -47,6 +54,7 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed);
 int parse_client_login(packet_t *packet, client_parsed_t *parsed);
 int parse_client_users(packet_t *packet, client_parsed_t *parsed);
 int parse_client_pubmsg(packet_t *packet, client_parsed_t *parsed);
+int parse_client_pubkey_rqst(packet_t *packet, client_parsed_t *parsed);
 void initialize_client_parsed(client_parsed_t *p);
 bool is_client_parsed_legal(client_parsed_t *p);
 void free_client_parsed(client_parsed_t *p);

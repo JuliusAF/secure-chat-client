@@ -393,6 +393,35 @@ void handle_client_pubmsg(client_parsed_t *p, client_t *client_info, int pipefd)
   write(pipefd, PIPE_MSG_UPDATE, PIPE_MSG_LEN);
 }
 
+/* this function handles a public key request from the client */
+void handle_client_pubkey_rqst(client_parsed_t *p, client_t *client_info) {
+  unsigned int fetchlen;
+  char *fetched;
+  int ret;
+  packet_t *packet;
+
+  if (!is_client_parsed_legal(p) || client_info == NULL)
+    return;
+
+  fetched = fetch_db_pubkey(client_info, &fetchlen);
+  if (fetched == NULL) {
+    fprintf(stderr, "failed to fetched key\n");
+    goto cleanup;
+  }
+
+  packet = gen_s_pubkey_rqst_packet(p, fetched, fetchlen);
+  ret = send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
+  if (ret < 1)
+    fprintf(stderr, "failed to send pubkey rqst packet\n");
+
+  cleanup:
+
+  free(fetched);
+}
+
+
+
+
 /* this function deals with a database message update. It searches for all
 messages written to the database since last update (using the fetch_db_messages() function)
 and sends them too the client. The messages are only those the client should be permitted to see */

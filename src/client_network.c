@@ -106,7 +106,7 @@ unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypai
   bool error = false;
   int keypair_sz, payload_sz, encrypted_sz;
   unsigned char *payload = NULL, *serial_keys = NULL,
-  encrypted_keys[4000], *iv = NULL, *hashed_pass = NULL, *tmp;
+  encrypted_keys[8000], *iv = NULL, *hashed_pass = NULL, *tmp;
 
   if (n == NULL || n->command != COMMAND_REGISTER ||
       !is_keypair_legal(k) || size == NULL ||
@@ -348,6 +348,74 @@ packet_t *gen_c_pubmsg_packet(command_t *n, user_t *u) {
   return pack_packet(header, payload);
 }
 
+/* function to serialize a public key request. Places the size of the created payload
+in the second argument. The structure is: username->iv->encrypted message */
+unsigned char *serialize_pubkey_rqst(command_t *n, user_t *u, unsigned int *payload_sz) {
+  const unsigned int max = 2000;
+  unsigned char *payload = NULL, encrypted_msg[max], *tmp, *iv;
+  char msg[max];
+  int encrypted_sz, ret;
+
+  iv = create_rand_salt(IV_SIZE);
+  if (iv == NULL)
+    return NULL;
+  /* create the formatted message with date etc. */
+  memset(msg, '\0', max);
+  ret = create_formatted_msg(msg, n, u);
+  if (ret < 1)
+    return NULL;
+    
+  /* encrypt the message and receive message length */
+  encrypted_sz = apply_aes(encrypted_msg, (unsigned char *) msg,
+                 strlen(msg), u->masterkey, iv, ENCRYPT);
+  if (encrypted_sz < 0) {
+    free(iv);
+    return NULL;
+  }
+
+  *payload_sz = USERNAME_MAX + IV_SIZE + sizeof(unsigned int) + encrypted_sz;
+  payload = safe_malloc(sizeof(unsigned char) * *payload_sz);
+  if (payload == NULL) {
+    free(iv);
+    return NULL;
+  }
+
+  tmp = payload;
+
+  memset(payload, '\0', *payload_sz);
+  memcpy(tmp, n->privmsg.username, strlen(n->privmsg.username));
+  tmp += USERNAME_MAX;
+  memcpy(tmp, iv, IV_SIZE);
+  tmp += IV_SIZE;
+  memcpy(tmp, &encrypted_sz, sizeof(int));
+  tmp += sizeof(int);
+  memcpy(tmp, encrypted_msg, encrypted_sz);
+
+  free(iv);
+  return payload;
+}
+
+/* this function creates a public key request. This asks the server to supply the public
+key corresponding to the username mentioned. It includes the encrypted message to send
+and the IV used to encrypt it so that the message can send back all of it, and the client
+can process the encryption of the message for the other client without having to specifically
+wait for a return packet */
+packet_t *gen_c_pubkey_rqst_packet(command_t *n, user_t *u) {
+  unsigned int payload_sz;
+  unsigned char *payload = NULL;
+  packet_hdr_t *header = NULL;
+
+  payload = serialize_pubkey_rqst(n, u, &payload_sz);
+  header = initialize_header(C_META_PUBKEY_RQST, payload_sz);
+  if (payload == NULL || header == NULL) {
+    free(payload);
+    free(header);
+    return NULL;
+  }
+
+  return pack_packet(header, payload);
+}
+
 /* creates a date string from a given time_t struct */
 int create_date_string(char *date, time_t t) {
 	struct tm *tmp;
@@ -372,7 +440,10 @@ int create_date_string(char *date, time_t t) {
 
 /* Takes as input a buffer, a parsed command and the user info. If the command is a private
 or public message, it concatenates the fields for the corresponding message
-into one string and stores it in the buffer.*/
+into one string and stores it in the buffer.
+Returns:
+1 on success
+-1 on failure */
 int create_formatted_msg(char *dest, command_t *n, user_t *u) {
 	char date[60];
 	int ret;

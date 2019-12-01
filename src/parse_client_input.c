@@ -51,6 +51,7 @@ client_parsed_t *parse_client_input(packet_t *p) {
       ret = parse_client_users(p, parsed);
       break;
     case C_META_PUBKEY_RQST:
+      ret = parse_client_pubkey_rqst(p, parsed);
       break;
     default:
       ret = -1;
@@ -248,6 +249,45 @@ int parse_client_pubmsg(packet_t *packet, client_parsed_t *parsed) {
   return 1;
 }
 
+/* handles a client request for another users public key
+Returns:
+1 on succes
+-1 on failure */
+int parse_client_pubkey_rqst(packet_t *packet, client_parsed_t *parsed) {
+  unsigned char *tmp, *tmpend;
+  unsigned int size;
+
+  if (!is_packet_legal(packet) || parsed == NULL)
+    return -1;
+
+  size = packet->header->pckt_sz;
+  tmp = packet->payload;
+  tmpend = tmp + size;
+
+  /* check the packet contains the minimum required size */
+  if ((tmp + USERNAME_MAX + IV_SIZE + sizeof(unsigned int)) > tmpend) {
+    fprintf(stderr, "request packet fails minimum size check\n");
+    return -1;
+  }
+
+  parsed->pubkey_rqst.username = safe_malloc(sizeof(char) * USERNAME_MAX+1);
+  if (parsed->pubkey_rqst.username == NULL)
+    return -1;
+
+  memset(parsed->pubkey_rqst.username, '\0', USERNAME_MAX+1);
+  memcpy(parsed->pubkey_rqst.username, tmp, USERNAME_MAX);
+
+  /* copy the original packet into the parse struct to make it easier to recreate the packet to return */
+  parsed->pubkey_rqst.original = safe_malloc(sizeof(unsigned char) * size+1);
+  if (parsed->pubkey_rqst.original == NULL)
+    return -1;
+  memcpy(parsed->pubkey_rqst.original, packet->payload, size);
+  parsed->pubkey_rqst.original[size] = '\0';
+  parsed->pubkey_rqst.original_sz = size;
+
+  return 1;
+}
+
 /* sets the pointers of the parsed struct to null for the type of the parsed struct
 passed to it */
 void initialize_client_parsed(client_parsed_t *p) {
@@ -279,6 +319,8 @@ void initialize_client_parsed(client_parsed_t *p) {
       /* nothing to initialize */
       break;
     case C_META_PUBKEY_RQST:
+      p->pubkey_rqst.username = NULL;
+      p->pubkey_rqst.original = NULL;
       break;
     default:
       break;
@@ -319,6 +361,9 @@ bool is_client_parsed_legal(client_parsed_t *p) {
       /* nothing to check in this instance */
       break;
     case C_META_PUBKEY_RQST:
+      if (p->pubkey_rqst.username == NULL ||
+          p->pubkey_rqst.original == NULL)
+        return false;
       break;
     default:
       break;
@@ -356,6 +401,8 @@ void free_client_parsed(client_parsed_t *p) {
       /* nothing to free in this instance */
       break;
     case C_META_PUBKEY_RQST:
+      free(p->pubkey_rqst.username);
+      free(p->pubkey_rqst.original);
       break;
     default:
       break;

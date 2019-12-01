@@ -35,6 +35,7 @@ void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd);
 void handle_client_login(client_parsed_t *p, client_t *client_info);
 void handle_client_users(client_parsed_t *p, client_t *client_info);
 void handle_client_pubmsg(client_parsed_t *p, client_t *client_info, int pipefd);
+void handle_client_pubkey_rqst(client_parsed_t *p, client_t *client_info);
 
 /* this function handles when the databse is update with a message */
 void handle_db_msg_update(client_t *client_info);

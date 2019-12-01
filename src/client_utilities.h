@@ -41,6 +41,7 @@ void handle_user_register(command_t *node, user_t *user, request_t *request);
 void handle_user_login(command_t *node, user_t *user, request_t *request);
 void handle_user_users(command_t *node, user_t *user);
 void handle_user_pubmsg(command_t *node, user_t *user);
+void handle_user_privmsg(command_t *node, user_t *user);
 void print_error(char *s);
 
 /* the functions handle packets coming from the server over the socket */

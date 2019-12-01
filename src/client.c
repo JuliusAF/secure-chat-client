@@ -59,7 +59,7 @@ int main(int argc, const char* argv[]) {
 	X509_VERIFY_PARAM *param = SSL_get0_param(ssl);
 	X509_VERIFY_PARAM_set_hostflags(param, 0);
 	if (!X509_VERIFY_PARAM_set1_host(param, SERVER_COMMON_NAME, sizeof(SERVER_COMMON_NAME)-1)) {
-		printf("error\n");
+		printf("failed to verify server common name\n");
 	  exit(EXIT_FAILURE);
 	}
 	SSL_set_verify(ssl, SSL_VERIFY_PEER, NULL);
@@ -72,6 +72,7 @@ int main(int argc, const char* argv[]) {
 	if (ssl_block_connect(ssl, socketfd) != 1) {
     ERR_print_errors_fp(stderr);
     fprintf(stderr, "verify result=%ld\n", SSL_get_verify_result(ssl));
+		printf("it is likely that the server has reached the maximum number of clients\n");
     exit(EXIT_FAILURE);
   }
 

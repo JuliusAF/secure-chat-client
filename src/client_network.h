@@ -24,6 +24,9 @@ packet_t *gen_c_users_packet(command_t *n);
 /* functions to handle a public message */
 unsigned char *serialize_pubmsg(char *message, user_t *u, unsigned int payload_sz);
 packet_t *gen_c_pubmsg_packet(command_t *n, user_t *u);
+/* functions to handle a private message request */
+unsigned char *serialize_pubkey_rqst(command_t *n, user_t *u, unsigned int *payload_sz);
+packet_t *gen_c_pubkey_rqst_packet(command_t *n, user_t *u);
 
 /* these functions create a formatted message if the command is a public
 message of a private message */

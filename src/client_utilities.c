@@ -148,10 +148,7 @@ void handle_user_input(command_t *n, user_t *u, request_t *r) {
 			handle_user_register(n, u, r);
       break;
     case COMMAND_PRIVMSG:
-			if (!u->is_logged) {
-				print_error("you must be logged in to send a private message");
-				break;
-			}
+			handle_user_privmsg(n, u);
       break;
     case COMMAND_PUBMSG:
 			handle_user_pubmsg(n, u);
@@ -305,6 +302,31 @@ void handle_user_pubmsg(command_t *node, user_t *user) {
 		fprintf(stderr, "failed to send user /users packet\n");
 	}
 
+}
+
+/* creates a public key request packet to send to the user. If a public key is returned
+the actual encryption of the private message is handled in the handle_server_ functions*/
+void handle_user_privmsg(command_t *node, user_t *user) {
+	int ret;
+	packet_t *packet = NULL;
+
+	if (node == NULL || user == NULL)
+		return;
+
+	if (!user->is_logged) {
+		print_error("you must be logged in to send a private message");
+		return;
+	}
+
+	packet = gen_c_pubkey_rqst_packet(node, user);
+	if (packet == NULL)
+		return;
+
+	sign_client_packet(packet, user);
+	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
+	if (ret < 1)	{
+		fprintf(stderr, "failed to send user /users packet\n");
+	}
 }
 
 /* prints a custom error message*/

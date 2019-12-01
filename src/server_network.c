@@ -186,3 +186,41 @@ packet_t *gen_s_msgcount_packet(unsigned int count) {
 
   return pack_packet(header, payload);
 }
+
+/* serialized the response to a public key request from the client */
+unsigned char *serialize_pubkey_request(client_parsed_t *p, char *key, unsigned int len, unsigned int payload_sz) {
+  unsigned char *payload, *tmp;
+
+  payload = safe_malloc(sizeof(unsigned char) * payload_sz);
+  if (payload == NULL)
+    return NULL;
+
+  tmp = payload;
+
+  memcpy(tmp, &len, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+  memcpy(tmp, key, len);
+  tmp += len;
+  memcpy(tmp, p->pubkey_rqst.original, p->pubkey_rqst.original_sz);
+
+  return payload;
+}
+
+/* creates a packet in response to a public key request */
+packet_t *gen_s_pubkey_rqst_packet(client_parsed_t *p, char *key, unsigned int len) {
+  unsigned int payload_sz;
+  unsigned char *payload = NULL;
+  packet_hdr_t *header = NULL;
+
+  payload_sz = p->pubkey_rqst.original_sz + sizeof(unsigned int) + len;
+
+  header = initialize_header(S_META_PUBKEY_RESPONSE, payload_sz);
+  payload = serialize_pubkey_request(p, key, len, payload_sz);
+  if (header == NULL || payload == NULL) {
+    free(header);
+    free(payload);
+    return NULL;
+  }
+
+  return pack_packet(header, payload);
+}
