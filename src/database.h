@@ -35,7 +35,7 @@ int handle_db_exit(client_t *client_info);
 fetched_userinfo_t *fetch_db_user_info(client_t *client_info);
 msg_queue_t *fetch_db_messages(client_t *client_info);
 char *fetch_db_users(void);
-char *fetch_db_pubkey(client_t *client_info, unsigned int *fetchlen);
+char *fetch_db_pubkey(char *name, unsigned int *fetchlen, char *err);
 
 
 #endif

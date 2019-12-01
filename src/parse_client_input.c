@@ -59,6 +59,7 @@ client_parsed_t *parse_client_input(packet_t *p) {
   }
 
   if (ret < 0) {
+    fprintf(stderr, "packet from client parse failed\n");
     free_client_parsed(parsed);
     return NULL;
   }

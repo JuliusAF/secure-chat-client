@@ -317,6 +317,10 @@ void handle_user_privmsg(command_t *node, user_t *user) {
 		print_error("you must be logged in to send a private message");
 		return;
 	}
+	else if (strncmp(node->privmsg.username, user->username, USERNAME_MAX) == 0) {
+		print_error("you can not send a private message to yourself");
+		return;
+	}
 
 	packet = gen_c_pubkey_rqst_packet(node, user);
 	if (packet == NULL)

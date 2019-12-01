@@ -705,7 +705,7 @@ char *fetch_db_users() {
   return fetched;
 }
 
-char *fetch_db_pubkey(client_t *client_info, unsigned int *fetchlen) {
+char *fetch_db_pubkey(char *name, unsigned int *fetchlen, char *err) {
   const char *tmp;
   int rc, step;
   char *sql, *fetched = NULL;
@@ -720,7 +720,7 @@ char *fetch_db_pubkey(client_t *client_info, unsigned int *fetchlen) {
 
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK) {
-    sqlite3_bind_text(res, 1, client_info->username, -1, SQLITE_STATIC);
+    sqlite3_bind_text(res, 1, name, -1, SQLITE_STATIC);
   }
   else {
     fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
@@ -737,6 +737,10 @@ char *fetch_db_pubkey(client_t *client_info, unsigned int *fetchlen) {
     tmp = sqlite3_column_blob(res, 0);
     memcpy(fetched, tmp, *fetchlen);
     fetched[*fetchlen] = '\0';
+  }
+  else {
+    strcpy(err, "there is no user by this name");
+    printf("reached here?\n");
   }
 
   cleanup:

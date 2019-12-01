@@ -251,6 +251,7 @@ bool is_client_sig_good(packet_t *p, client_t *c) {
   return ret;
 }
 
+/* switch function that calls the appropriate function to handle some parsed input from the client */
 void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd) {
 
   if (!is_client_parsed_legal(p))
@@ -276,6 +277,7 @@ void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd) 
       handle_client_users(p, client_info);
       break;
     case C_META_PUBKEY_RQST:
+      handle_client_pubkey_rqst(p, client_info);
       break;
     default:
       break;
@@ -396,15 +398,27 @@ void handle_client_pubmsg(client_parsed_t *p, client_t *client_info, int pipefd)
 /* this function handles a public key request from the client */
 void handle_client_pubkey_rqst(client_parsed_t *p, client_t *client_info) {
   unsigned int fetchlen;
-  char *fetched;
+  char *fetched, err[200] = "";
   int ret;
   packet_t *packet;
 
   if (!is_client_parsed_legal(p) || client_info == NULL)
     return;
 
-  fetched = fetch_db_pubkey(client_info, &fetchlen);
-  if (fetched == NULL) {
+  if (strncmp(p->pubkey_rqst.username, client_info->username, USERNAME_MAX) == 0) {
+    strcpy(err, "you can not send a private message to yourself");
+    packet = gen_s_error_packet(S_MSG_GENERIC_ERR, err);
+    send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
+    goto cleanup;
+  }
+
+  fetched = fetch_db_pubkey(p->pubkey_rqst.username, &fetchlen, err);
+  if (fetched == NULL && strlen(err) != 0) {
+    packet = gen_s_error_packet(S_MSG_GENERIC_ERR, err);
+    send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
+    goto cleanup;
+  }
+  else if (fetched == NULL) {
     fprintf(stderr, "failed to fetched key\n");
     goto cleanup;
   }
