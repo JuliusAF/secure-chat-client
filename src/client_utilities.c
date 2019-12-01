@@ -17,7 +17,7 @@ user_t *initialize_user_info(SSL *ssl, int connfd) {
 	if (ssl == NULL)
 		return NULL;
 
-	user_t *user = safe_malloc(sizeof(user_t));
+	user_t *user = safe_malloc(sizeof *user);
 	if (user == NULL)
 		return NULL;
 
@@ -33,7 +33,7 @@ user_t *initialize_user_info(SSL *ssl, int connfd) {
 
 /* initializes and returns request struct*/
 request_t *initialize_request(void) {
-	request_t *r = safe_malloc(sizeof(request_t));
+	request_t *r = safe_malloc(sizeof *r);
 	if (r == NULL)
 		return NULL;
 

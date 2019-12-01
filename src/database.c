@@ -207,8 +207,8 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
   }
 
   /* allocate space for variables with fixed size that will be selected from databse */
-  salt = safe_malloc(sizeof(unsigned char) * SALT_SIZE+1);
-  db_hashed_pass = safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH+1);
+  salt = safe_malloc(SALT_SIZE+1 * sizeof *salt);
+  db_hashed_pass = safe_malloc(SHA256_DIGEST_LENGTH+1 * sizeof *db_hashed_pass);
   if (salt == NULL && db_hashed_pass == NULL){
     ret = 0;
     goto cleanup;
@@ -240,7 +240,7 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
 
     /* get the size of the public key and allocate the necessary space */
     publen = sqlite3_column_bytes(res, 3);
-    pubkey = safe_malloc(sizeof(char) * publen+1);
+    pubkey = safe_malloc(publen+1 * sizeof *pubkey);
     if (pubkey == NULL) {
       ret = 0;
       goto cleanup;
@@ -393,7 +393,7 @@ int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err
     goto cleanup;
   }
   /* create and store pubkey variable for storage in client info struct */
-  pubkey1 = safe_malloc(sizeof(char) * publen+1);
+  pubkey1 = safe_malloc(publen+1 * sizeof *pubkey1);
   if (pubkey1 == NULL) {
     ret = 0;
     goto cleanup;
@@ -594,7 +594,7 @@ fetched_userinfo_t *fetch_db_user_info(client_t *client_info) {
       strlen(client_info->username) == 0)
     return NULL;
 
-  fetched = safe_malloc(sizeof(fetched_userinfo_t));
+  fetched = safe_malloc(sizeof *fetched);
   if (fetched == NULL)
     return NULL;
   fetched->encrypted_keys = NULL;
@@ -628,7 +628,7 @@ fetched_userinfo_t *fetch_db_user_info(client_t *client_info) {
 
     size = (unsigned int) sqlite3_column_bytes(res, 1);
     fetched->encrypt_sz = size;
-    fetched->encrypted_keys = safe_malloc(sizeof(unsigned char) * size+1);
+    fetched->encrypted_keys = safe_malloc(size+1 * sizeof *fetched->encrypted_keys);
     if (fetched->encrypted_keys == NULL)
       goto cleanup;
     tmp = sqlite3_column_blob(res, 1);
@@ -727,7 +727,7 @@ char *fetch_db_users() {
   if (db == NULL)
     return NULL;
 
-  fetched = safe_malloc(sizeof(char) * size);
+  fetched = safe_malloc(size * sizeof *fetched);
   if (fetched == NULL){
     sqlite3_close(db);
     return NULL;
@@ -792,7 +792,7 @@ char *fetch_db_pubkey(char *name, unsigned int *fetchlen, char *err) {
   step = sqlite3_step(res);
   if (step == SQLITE_ROW) {
     *fetchlen = (unsigned int) sqlite3_column_bytes(res, 0);
-    fetched = safe_malloc(sizeof(char) * *fetchlen+1);
+    fetched = safe_malloc(*fetchlen+1 * sizeof *fetched);
     if (fetched == NULL)
       goto cleanup;
 

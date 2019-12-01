@@ -184,7 +184,7 @@ returns a pointer to the structure that is later free with free_packet() */
 packet_hdr_t *initialize_header(uint16_t id, uint32_t sz) {
   packet_hdr_t *header;
 
-  header = safe_malloc(sizeof(packet_hdr_t));
+  header = safe_malloc(sizeof *header);
   if (header == NULL)
     return NULL;
 
@@ -203,7 +203,7 @@ packet_t *pack_packet(packet_hdr_t *header, unsigned char *payload) {
   if (header == NULL || payload == NULL)
     return NULL;
 
-  p = safe_malloc(sizeof(packet_t));
+  p = safe_malloc(sizeof *p);
   if (p == NULL)
     return NULL;
 
@@ -230,7 +230,7 @@ unsigned char *serialize_packet(packet_t *p) {
   hdr = p->header;
   data = p->payload;
   size = (int) (HEADER_SIZE+hdr->pckt_sz);
-  serialized = safe_malloc(sizeof(unsigned char) * size);
+  serialized = safe_malloc(size * sizeof *serialized);
   if (serialized == NULL){
     free_packet(p);
     return NULL;
@@ -262,10 +262,10 @@ packet_t *deserialize_packet(unsigned char *buffer, int size) {
     || size > MAX_PACKET_SIZE)
     return NULL;
 
-  packet = safe_malloc(sizeof(packet_t));
+  packet = safe_malloc(sizeof *packet);
   if (packet == NULL)
     return NULL;
-  header = safe_malloc(sizeof(packet_hdr_t));
+  header = safe_malloc(sizeof *header);
   if (header == NULL) {
     free(packet);
     return NULL;
@@ -279,7 +279,7 @@ packet_t *deserialize_packet(unsigned char *buffer, int size) {
     return NULL;
   }
 
-  payload = safe_malloc(sizeof(unsigned char) * header->pckt_sz);
+  payload = safe_malloc(header->pckt_sz * sizeof *payload);
   if (payload == NULL) {
     free(packet);
     free(header);

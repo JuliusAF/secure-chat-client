@@ -20,7 +20,7 @@ server_parsed_t *parse_server_input(packet_t *p) {
     return NULL;
   }
 
-  parsed = safe_malloc(sizeof(server_parsed_t));
+  parsed = safe_malloc(sizeof *parsed);
   if (parsed == NULL)
     return NULL;
 
@@ -81,7 +81,7 @@ int parse_server_users(packet_t *packet, server_parsed_t *parsed) {
     return -1;
 
   size = packet->header->pckt_sz;
-  users = safe_malloc(sizeof(char) * size+1);
+  users = safe_malloc(size+1 * sizeof *users);
   if (users == NULL)
     return -1;
   memcpy(users, packet->payload, size);
@@ -117,7 +117,7 @@ int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed) {
     return -1;
   }
 
-  parsed->user_details.iv = safe_malloc(sizeof(unsigned char) * IV_SIZE+1);
+  parsed->user_details.iv = safe_malloc(IV_SIZE+1 * sizeof *parsed->user_details.iv);
   if (parsed->user_details.iv == NULL)
     return -1;
 
@@ -133,7 +133,7 @@ int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed) {
     return -1;
   }
 
-  parsed->user_details.encrypted_keys = safe_malloc(sizeof(unsigned char) * parsed->user_details.encrypt_sz+1);
+  parsed->user_details.encrypted_keys = safe_malloc(parsed->user_details.encrypt_sz+1 * sizeof *parsed->user_details.encrypted_keys);
   if (parsed->user_details.encrypted_keys == NULL)
     return -1;
 
@@ -164,8 +164,8 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   tmp += sizeof(unsigned int);
   if((tmp + parsed->messages.siglen) > tmpend)
     return -1;
-    
-  parsed->messages.sig = safe_malloc(sizeof(unsigned char) * parsed->messages.siglen+1);
+
+  parsed->messages.sig = safe_malloc(parsed->messages.siglen+1 * sizeof *parsed->messages.sig);
   if (parsed->messages.sig == NULL)
     return -1;
   memcpy(parsed->messages.sig, tmp, parsed->messages.siglen);
@@ -188,7 +188,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   if ((tmp + parsed->messages.publen) > tmpend)
     return -1;
 
-  parsed->messages.pubkey = safe_malloc(sizeof(char) * parsed->messages.publen+1);
+  parsed->messages.pubkey = safe_malloc(parsed->messages.publen+1 * sizeof *parsed->messages.pubkey);
   if (parsed->messages.pubkey == NULL)
     return -1;
   memcpy(parsed->messages.pubkey, tmp, parsed->messages.publen);
@@ -203,7 +203,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   if ((tmp + parsed->messages.msglen) > tmpend)
     return -1;
 
-  parsed->messages.message = safe_malloc(sizeof(unsigned char) * parsed->messages.msglen+1);
+  parsed->messages.message = safe_malloc(parsed->messages.msglen+1 * sizeof *parsed->messages.message);
   if (parsed->messages.message == NULL)
     return -1;
   memcpy(parsed->messages.message, tmp, parsed->messages.msglen);
@@ -217,7 +217,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
 
     if ((tmp + USERNAME_MAX) > tmpend)
       return -1;
-    parsed->messages.recipient = safe_malloc(sizeof(char) * USERNAME_MAX+1);
+    parsed->messages.recipient = safe_malloc(USERNAME_MAX+1 * sizeof *parsed->messages.recipient);
     if (parsed->messages.recipient == NULL)
       return -1;
     memset(parsed->messages.recipient, '\0', USERNAME_MAX+1);
@@ -227,7 +227,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
     /* store the initialization vector used to encrypt the private message */
     if ((tmp + IV_SIZE) > tmpend)
       return -1;
-    parsed->messages.iv = safe_malloc(sizeof(unsigned char) * IV_SIZE+1);
+    parsed->messages.iv = safe_malloc(IV_SIZE+1 * sizeof *parsed->messages.iv);
     if (parsed->messages.iv == NULL)
       return -1;
     memcpy(parsed->messages.iv, tmp, IV_SIZE);
@@ -242,7 +242,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
     if ((tmp + parsed->messages.s_symkeylen) > tmpend)
       return -1;
 
-    parsed->messages.s_symkey = safe_malloc(sizeof(unsigned char) * parsed->messages.s_symkeylen+1);
+    parsed->messages.s_symkey = safe_malloc(parsed->messages.s_symkeylen+1 * sizeof *parsed->messages.s_symkey);
     if (parsed->messages.s_symkey == NULL)
       return -1;
     memcpy(parsed->messages.s_symkey, tmp, parsed->messages.s_symkeylen);
@@ -257,7 +257,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
     if ((tmp + parsed->messages.r_symkeylen) > tmpend)
       return -1;
 
-    parsed->messages.r_symkey = safe_malloc(sizeof(unsigned char) * parsed->messages.r_symkeylen+1);
+    parsed->messages.r_symkey = safe_malloc(parsed->messages.r_symkeylen+1 * sizeof *parsed->messages.r_symkey);
     if (parsed->messages.r_symkey == NULL)
       return -1;
     memcpy(parsed->messages.r_symkey, tmp, parsed->messages.r_symkeylen);
@@ -287,7 +287,7 @@ int parse_server_pubkey_response(packet_t *packet, server_parsed_t *parsed) {
   /* check if reading the key causes buffer overflow, if not copy it */
   if ((tmp + parsed->pubkey_response.keylen) > tmpend)
     return -1;
-  parsed->pubkey_response.key = safe_malloc(sizeof(unsigned char) * parsed->pubkey_response.keylen+1);
+  parsed->pubkey_response.key = safe_malloc(parsed->pubkey_response.keylen+1 * sizeof *parsed->pubkey_response.key);
   if (parsed->pubkey_response.key == NULL)
     return -1;
   memcpy(parsed->pubkey_response.key, tmp, parsed->pubkey_response.keylen);
@@ -302,7 +302,7 @@ int parse_server_pubkey_response(packet_t *packet, server_parsed_t *parsed) {
 
   if ((tmp + parsed->pubkey_response.siglen) > tmpend)
     return -1;
-  parsed->pubkey_response.sig = safe_malloc(sizeof(unsigned char) * parsed->pubkey_response.siglen+1);
+  parsed->pubkey_response.sig = safe_malloc(parsed->pubkey_response.siglen+1 * sizeof *parsed->pubkey_response.sig);
   memcpy(parsed->pubkey_response.sig, tmp, parsed->pubkey_response.siglen);
   parsed->pubkey_response.sig[parsed->pubkey_response.siglen] = '\0';
   tmp += parsed->pubkey_response.siglen;
@@ -320,7 +320,7 @@ int parse_server_pubkey_response(packet_t *packet, server_parsed_t *parsed) {
   /* check if reading the username causes buffer overflow, if not copy it */
   if ((tmp + USERNAME_MAX) > tmpend)
     return -1;
-  parsed->pubkey_response.username = safe_malloc(sizeof(char) * USERNAME_MAX+1);
+  parsed->pubkey_response.username = safe_malloc(USERNAME_MAX+1 * sizeof *parsed->pubkey_response.username);
   if (parsed->pubkey_response.username == NULL)
     return -1;
   memset(parsed->pubkey_response.username, '\0', USERNAME_MAX+1);
@@ -330,7 +330,7 @@ int parse_server_pubkey_response(packet_t *packet, server_parsed_t *parsed) {
   /* checks if the next known required reads cause buffer overflow */
   if ((tmp + IV_SIZE + sizeof(unsigned int)) > tmpend)
     return -1;
-  parsed->pubkey_response.iv = safe_malloc(sizeof(unsigned char) * IV_SIZE+1);
+  parsed->pubkey_response.iv = safe_malloc(IV_SIZE+1 * sizeof *parsed->pubkey_response.iv);
   if (parsed->pubkey_response.iv == NULL)
     return -1;
   memcpy(parsed->pubkey_response.iv, tmp, IV_SIZE);
@@ -343,7 +343,7 @@ int parse_server_pubkey_response(packet_t *packet, server_parsed_t *parsed) {
   /* check if reading the encrypted message causes buffer overflow, if not copy it */
   if ((tmp + parsed->pubkey_response.encrypt_sz) > tmpend)
     return -1;
-  parsed->pubkey_response.encrypted_msg = safe_malloc(sizeof(unsigned char) * parsed->pubkey_response.encrypt_sz+1);
+  parsed->pubkey_response.encrypted_msg = safe_malloc(parsed->pubkey_response.encrypt_sz+1 * sizeof *parsed->pubkey_response.encrypted_msg);
   if (parsed->pubkey_response.encrypted_msg == NULL)
     return -1;
   memcpy(parsed->pubkey_response.encrypted_msg, tmp, parsed->pubkey_response.encrypt_sz);
@@ -377,7 +377,7 @@ int parse_server_error(packet_t *packet, server_parsed_t *parsed) {
   if (size > MAX_PAYLOAD_SIZE)
     return -1;
 
-  parsed->error_message = safe_malloc(sizeof(char) * size+1);
+  parsed->error_message = safe_malloc(size+1 * sizeof *parsed->error_message);
   if (parsed->error_message == NULL)
     return -1;
 

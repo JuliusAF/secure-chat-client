@@ -75,7 +75,7 @@ parse_input() that error check user input and if there are no errors,
 it places the fields belonging to some input into a node of type command_t*/
 
 command_t *make_exit_node(char *input) {
-  command_t *node = safe_malloc(sizeof(command_t));
+  command_t *node = safe_malloc(sizeof *node);
 
   if (strcmp(input,"/exit") != 0)
     make_error(node, "User input after '/exit'. Incorrect command");
@@ -85,7 +85,7 @@ command_t *make_exit_node(char *input) {
 }
 
 command_t* make_login_node(char *input) {
-  command_t *node = safe_malloc(sizeof(command_t));
+  command_t *node = safe_malloc(sizeof *node);
   char *temp = malloc(sizeof(char) * (strlen(input)+1)),
   *token, *username, *password;
 
@@ -141,8 +141,8 @@ command_t* make_register_node(char *input) {
 
 command_t *make_privmsg_node(char *input) {
   int token_size;
-  command_t *node = safe_malloc(sizeof(command_t));
-  char *temp = safe_malloc(sizeof(char)*(strlen(input)+1)), *tmp_msg,
+  command_t *node = safe_malloc(sizeof *node);
+  char *temp = safe_malloc(strlen(input)+1 * sizeof *temp), *tmp_msg,
   *token, *username;
 
   memcpy(temp, input, strlen(input)+1);
@@ -183,7 +183,7 @@ command_t *make_privmsg_node(char *input) {
 }
 
 command_t* make_pubmsg_node(char *input) {
-  command_t *node = safe_malloc(sizeof(command_t));
+  command_t *node = safe_malloc(sizeof *node);
 
   if (!is_message_legal(input))
     make_error(node, "Message follows incorrect syntax or is empty");
@@ -198,7 +198,7 @@ command_t* make_pubmsg_node(char *input) {
 }
 
 command_t* make_users_node(char *input) {
-  command_t *node = safe_malloc(sizeof(command_t));
+  command_t *node = safe_malloc(sizeof *node);
 
   if (strcmp(input,"/users") != 0)
     make_error(node, "User input after 'users'. Incorrect command");

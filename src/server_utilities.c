@@ -15,7 +15,7 @@
 
 /* initializes all variables in a client_t struct*/
 static client_t *initialize_client_info(int connfd, SSL *ssl) {
-  client_t *c = safe_malloc(sizeof(client_t));
+  client_t *c = safe_malloc(sizeof *c);
 
   c->connfd = connfd;
   c->ssl = ssl;
@@ -143,7 +143,7 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
       packet = NULL;
       input = NULL;
 
-      input = safe_malloc(sizeof(unsigned char) * MAX_PACKET_SIZE);
+      input = safe_malloc(MAX_PACKET_SIZE * sizeof *input);
       if (input == NULL)
         continue;
       bytes_read = read_packet_from_socket(ssl, connfd, input);

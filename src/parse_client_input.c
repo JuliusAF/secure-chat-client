@@ -22,7 +22,7 @@ client_parsed_t *parse_client_input(packet_t *p) {
     return NULL;
   }
 
-  parsed = safe_malloc(sizeof(client_parsed_t));
+  parsed = safe_malloc(sizeof *parsed);
   if (parsed == NULL)
     return NULL;
 
@@ -89,13 +89,13 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
   tmpend = tmp + total;
 
   /* allocates memory for the variables that have a constant size */
-  parsed->reg_packet.username = safe_malloc(sizeof(char) * USERNAME_MAX+1);
+  parsed->reg_packet.username = safe_malloc(USERNAME_MAX+1 * sizeof *parsed->reg_packet.username);
   if (parsed->reg_packet.username == NULL)
     return -1;
-  parsed->reg_packet.hash_password = safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH+1);
+  parsed->reg_packet.hash_password = safe_malloc(SHA256_DIGEST_LENGTH+1 * sizeof *parsed->reg_packet.hash_password);
   if (parsed->reg_packet.hash_password == NULL)
     return -1;
-  parsed->reg_packet.iv = safe_malloc(sizeof(char) * IV_SIZE+1);
+  parsed->reg_packet.iv = safe_malloc(IV_SIZE+1 * sizeof *parsed->reg_packet.iv);
   if (parsed->reg_packet.iv == NULL)
     return -1;
 
@@ -116,7 +116,7 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
     return -1;
   }
 
-  parsed->reg_packet.pubkey = safe_malloc(sizeof(unsigned char) * parsed->reg_packet.publen+1);
+  parsed->reg_packet.pubkey = safe_malloc(parsed->reg_packet.publen+1 * sizeof *parsed->reg_packet.pubkey);
   if (parsed->reg_packet.pubkey == NULL)
     return -1;
 
@@ -134,7 +134,7 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
     return -1;
   }
 
-  parsed->reg_packet.encrypted_keys = safe_malloc(sizeof(unsigned char) * parsed->reg_packet.encrypt_sz+1);
+  parsed->reg_packet.encrypted_keys = safe_malloc(parsed->reg_packet.encrypt_sz+1 * sizeof *parsed->reg_packet.encrypted_keys);
   if (parsed->reg_packet.encrypted_keys == NULL)
     return -1;
 
@@ -155,8 +155,8 @@ int parse_client_login(packet_t *packet, client_parsed_t *parsed) {
   if (packet->header->pckt_sz != LOGIN_REQUEST_SIZE)
     return -1;
 
-  parsed->log_packet.username = safe_malloc(sizeof(char) * USERNAME_MAX+1);
-  parsed->log_packet.hash_password = safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH+1);
+  parsed->log_packet.username = safe_malloc(USERNAME_MAX+1 * sizeof *parsed->log_packet.username);
+  parsed->log_packet.hash_password = safe_malloc(SHA256_DIGEST_LENGTH+1 * sizeof *parsed->log_packet.hash_password);
   if (parsed->log_packet.username == NULL ||
       parsed->log_packet.hash_password == NULL)
     return -1;
@@ -226,8 +226,8 @@ int parse_client_pubmsg(packet_t *packet, client_parsed_t *parsed) {
   if ((tmp + msglen) > tmpend)
     return -1;
 
-  parsed->pubmsg_packet.sig = safe_malloc(sizeof(unsigned char) * packet->header->siglen+1);
-  parsed->pubmsg_packet.message = safe_malloc(sizeof(char) * msglen+1);
+  parsed->pubmsg_packet.sig = safe_malloc(packet->header->siglen+1 * sizeof *parsed->pubmsg_packet.sig);
+  parsed->pubmsg_packet.message = safe_malloc(msglen+1 * sizeof *parsed->pubmsg_packet.message);
   if (parsed->pubmsg_packet.sig == NULL ||
       parsed->pubmsg_packet.message == NULL)
     return -1;
@@ -259,7 +259,7 @@ int parse_client_pubkey_rqst(packet_t *packet, client_parsed_t *parsed) {
   /* copy the signature of the packet to the parsed struct. To be used to verify the
   validity of a server response to the request */
   parsed->pubkey_rqst.siglen = packet->header->siglen;
-  parsed->pubkey_rqst.sig = safe_malloc(sizeof(unsigned char) * parsed->pubkey_rqst.siglen+1);
+  parsed->pubkey_rqst.sig = safe_malloc(parsed->pubkey_rqst.siglen+1 * sizeof *parsed->pubkey_rqst.sig);
   memcpy(parsed->pubkey_rqst.sig, packet->header->sig, parsed->pubkey_rqst.siglen);
   parsed->pubkey_rqst.sig[parsed->pubkey_rqst.siglen] = '\0';
 
@@ -269,7 +269,7 @@ int parse_client_pubkey_rqst(packet_t *packet, client_parsed_t *parsed) {
     return -1;
   }
 
-  parsed->pubkey_rqst.username = safe_malloc(sizeof(char) * USERNAME_MAX+1);
+  parsed->pubkey_rqst.username = safe_malloc(USERNAME_MAX+1 * sizeof *parsed->pubkey_rqst.username);
   if (parsed->pubkey_rqst.username == NULL)
     return -1;
 
@@ -277,7 +277,7 @@ int parse_client_pubkey_rqst(packet_t *packet, client_parsed_t *parsed) {
   memcpy(parsed->pubkey_rqst.username, tmp, USERNAME_MAX);
 
   /* copy the original packet into the parse struct to make it easier to recreate the packet to return */
-  parsed->pubkey_rqst.original = safe_malloc(sizeof(unsigned char) * size+1);
+  parsed->pubkey_rqst.original = safe_malloc(size+1 * sizeof *parsed->pubkey_rqst.original);
   if (parsed->pubkey_rqst.original == NULL)
     return -1;
   memcpy(parsed->pubkey_rqst.original, packet->payload, size);
@@ -301,7 +301,7 @@ int parse_client_privmsg(packet_t *packet, client_parsed_t *parsed) {
 
   /* copy signature and its size into the parse struct */
   parsed->privmsg_packet.siglen = packet->header->siglen;
-  parsed->privmsg_packet.sig = safe_malloc(sizeof(unsigned char) * parsed->privmsg_packet.siglen+1);
+  parsed->privmsg_packet.sig = safe_malloc(parsed->privmsg_packet.siglen+1 * sizeof *parsed->privmsg_packet.sig);
   if (parsed->privmsg_packet.sig == NULL)
     return -1;
   memcpy(parsed->privmsg_packet.sig, packet->header->sig, parsed->privmsg_packet.siglen);
@@ -324,7 +324,7 @@ int parse_client_privmsg(packet_t *packet, client_parsed_t *parsed) {
 
   if ((tmp + parsed->privmsg_packet.msg_sz) > tmpend)
     return -1;
-  parsed->privmsg_packet.message = safe_malloc(sizeof(unsigned char) * parsed->privmsg_packet.msg_sz+1);
+  parsed->privmsg_packet.message = safe_malloc(parsed->privmsg_packet.msg_sz+1 * sizeof *parsed->privmsg_packet.message);
   if (parsed->privmsg_packet.message == NULL)
     return -1;
   memcpy(parsed->privmsg_packet.message, tmp, parsed->privmsg_packet.msg_sz);
@@ -334,7 +334,7 @@ int parse_client_privmsg(packet_t *packet, client_parsed_t *parsed) {
   /* reads the recipient into the struct */
   if ((tmp + USERNAME_MAX) > tmpend)
     return -1;
-  parsed->privmsg_packet.recipient = safe_malloc(sizeof(char) * USERNAME_MAX+1);
+  parsed->privmsg_packet.recipient = safe_malloc(USERNAME_MAX+1 * sizeof *parsed->privmsg_packet.recipient);
   if (parsed->privmsg_packet.recipient == NULL)
     return -1;
   memset(parsed->privmsg_packet.recipient, '\0', USERNAME_MAX+1);
@@ -344,7 +344,7 @@ int parse_client_privmsg(packet_t *packet, client_parsed_t *parsed) {
   /* reads the initialization vector into the struct */
   if ((tmp + IV_SIZE) > tmpend)
     return -1;
-  parsed->privmsg_packet.iv = safe_malloc(sizeof(unsigned char) * IV_SIZE+1);
+  parsed->privmsg_packet.iv = safe_malloc(IV_SIZE+1 * sizeof *parsed->privmsg_packet.iv);
   if (parsed->privmsg_packet.iv == NULL)
     return -1;
   memcpy(parsed->privmsg_packet.iv, tmp, IV_SIZE);
@@ -359,7 +359,7 @@ int parse_client_privmsg(packet_t *packet, client_parsed_t *parsed) {
 
   if ((tmp + parsed->privmsg_packet.s_symkeylen) > tmpend)
     return -1;
-  parsed->privmsg_packet.s_symkey = safe_malloc(sizeof(unsigned char) * parsed->privmsg_packet.s_symkeylen+1);
+  parsed->privmsg_packet.s_symkey = safe_malloc(parsed->privmsg_packet.s_symkeylen+1 * sizeof *parsed->privmsg_packet.s_symkey);
   if (parsed->privmsg_packet.s_symkey == NULL)
     return -1;
   memcpy(parsed->privmsg_packet.s_symkey, tmp, parsed->privmsg_packet.s_symkeylen);
@@ -374,7 +374,7 @@ int parse_client_privmsg(packet_t *packet, client_parsed_t *parsed) {
 
   if ((tmp + parsed->privmsg_packet.r_symkeylen) > tmpend)
     return -1;
-  parsed->privmsg_packet.r_symkey = safe_malloc(sizeof(unsigned char) * parsed->privmsg_packet.r_symkeylen+1);
+  parsed->privmsg_packet.r_symkey = safe_malloc(parsed->privmsg_packet.r_symkeylen+1 * sizeof *parsed->privmsg_packet.r_symkey);
   if (parsed->privmsg_packet.r_symkey == NULL)
     return -1;
   memcpy(parsed->privmsg_packet.r_symkey, tmp, parsed->privmsg_packet.r_symkeylen);

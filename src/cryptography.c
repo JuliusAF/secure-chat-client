@@ -16,7 +16,7 @@
 unsigned char *create_rand_salt(unsigned int size) {
   unsigned char *salt;
 
-  salt = safe_malloc(sizeof(unsigned char) * size);
+  salt = safe_malloc(size * sizeof *salt);
   if (salt == NULL)
     return NULL;
 
@@ -37,7 +37,7 @@ unsigned char *hash_password(char *input, unsigned int size, unsigned char *salt
   if (input == NULL)
     return NULL;
 
-  md = safe_malloc(sizeof(unsigned char) * SHA256_DIGEST_LENGTH);
+  md = safe_malloc(SHA256_DIGEST_LENGTH * sizeof *md);
   if (md == NULL)
     return NULL;
   tmp = (unsigned char *) input;
@@ -87,8 +87,8 @@ unsigned char *gen_master_key(char *username, char *password) {
       (saltlen = strlen(username)) > USERNAME_MAX)
     return NULL;
 
-  key = safe_malloc(sizeof(unsigned char) * MASTER_KEY_LEN+1);
-  salt = safe_malloc(sizeof(unsigned char) * saltlen);
+  key = safe_malloc(MASTER_KEY_LEN+1 * sizeof *key);
+  salt = safe_malloc(saltlen * sizeof *salt);
   if (key == NULL || salt == NULL) {
     free(key);
     free(salt);
@@ -125,7 +125,7 @@ keypair_t *create_rsa_pair() {
   RSA *rsa = NULL;
   keypair_t *keys = NULL;
 
-  keys = safe_malloc(sizeof(keypair_t));
+  keys = safe_malloc(sizeof *keys);
   if (keys == NULL) {
     error = true;
     goto cleanup;
@@ -166,7 +166,7 @@ keypair_t *create_rsa_pair() {
   }
 
   keylen = BIO_pending(biopriv);
-  keys->privkey = safe_malloc(sizeof(char) * (keylen+1));
+  keys->privkey = safe_malloc(keylen+1 * sizeof *keys->privkey);
   if (keys->privkey == NULL) {
     error = true;
     goto cleanup;
@@ -192,7 +192,7 @@ keypair_t *create_rsa_pair() {
   }
 
   keylen = BIO_pending(biopub);
-  keys->pubkey = safe_malloc(sizeof(char) * (keylen+1));
+  keys->pubkey = safe_malloc(keylen+1 * sizeof *keys->pubkey);
   if (keys->pubkey == NULL) {
     error = true;
     goto cleanup;

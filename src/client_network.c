@@ -29,7 +29,7 @@ unsigned char *serialize_keypair(keypair_t *k, int size) {
   if(!is_keypair_legal(k) || size < 0)
     return NULL;
 
-  serialized = safe_malloc(sizeof(unsigned char) * size);
+  serialized = safe_malloc(size * sizeof *serialized);
   if (serialized == NULL)
     return NULL;
 
@@ -54,7 +54,7 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
   if (serialized == NULL ||size < 0)
     return NULL;
 
-  keypair = safe_malloc(sizeof(keypair_t));
+  keypair = safe_malloc(sizeof *keypair);
   if (keypair == NULL)
     return NULL;
   keypair->privkey = NULL;
@@ -71,7 +71,7 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
     return NULL;
   }
 
-  keypair->privkey = safe_malloc(sizeof(char) * keypair->privlen+1);
+  keypair->privkey = safe_malloc(keypair->privlen+1 * sizeof *keypair->privkey);
   if (keypair->privkey == NULL) {
     free_keypair(keypair);
     return NULL;
@@ -87,7 +87,7 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
     return NULL;
   }
 
-  keypair->pubkey = safe_malloc(sizeof(char) * keypair->publen+1);
+  keypair->pubkey = safe_malloc(keypair->publen+1 * sizeof *keypair->pubkey);
   if (keypair->pubkey == NULL) {
     free_keypair(keypair);
     return NULL;
@@ -139,7 +139,7 @@ unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypai
                IV_SIZE + sizeof(int) + encrypted_sz;
   *size = payload_sz;
 
-  payload = safe_malloc(sizeof(unsigned char) * payload_sz);
+  payload = safe_malloc(payload_sz * sizeof *payload);
   if (payload == NULL){
     error = true;
     goto cleanup;
@@ -221,7 +221,7 @@ unsigned char *serialize_login(command_t *n) {
   if (hashed_pass == NULL)
     return NULL;
 
-  payload = safe_malloc(sizeof(unsigned char) * LOGIN_REQUEST_SIZE);
+  payload = safe_malloc(LOGIN_REQUEST_SIZE * sizeof *payload);
   if (payload == NULL){
     free(hashed_pass);
     return NULL;
@@ -270,7 +270,7 @@ packet_t *gen_c_users_packet(command_t *n) {
   if (n == NULL || n->command != COMMAND_USERS)
     return NULL;
 
-  payload = safe_malloc(sizeof(unsigned char) * USERS_MSG_SIZE);
+  payload = safe_malloc(USERS_MSG_SIZE * sizeof *payload);
   if (payload == NULL)
     return NULL;
 
@@ -301,7 +301,7 @@ unsigned char *serialize_pubmsg(char *message, user_t *u, unsigned int payload_s
   if (message == NULL || u == NULL || strlen(message) == 0)
     return NULL;
 
-  payload = safe_malloc(sizeof(unsigned char) * payload_sz);
+  payload = safe_malloc(payload_sz * sizeof *payload);
   if (payload == NULL)
     return NULL;
 
@@ -374,7 +374,7 @@ unsigned char *serialize_pubkey_rqst(command_t *n, user_t *u, unsigned int *payl
   }
 
   *payload_sz = USERNAME_MAX + IV_SIZE + sizeof(unsigned int) + encrypted_sz;
-  payload = safe_malloc(sizeof(unsigned char) * *payload_sz);
+  payload = safe_malloc(*payload_sz * sizeof *payload);
   if (payload == NULL) {
     free(iv);
     return NULL;
@@ -461,7 +461,7 @@ unsigned char *serialize_privmsg(server_parsed_t *p, user_t *u, unsigned int *pa
   /* calculate the size of the packet as described in the README.md */
   *payload_sz = sizeof(unsigned int) + u->rsa_keys->publen + sizeof(unsigned int) + encryptedlen +
                 USERNAME_MAX + IV_SIZE + sizeof(unsigned int) + s_symkeylen + sizeof(unsigned int) + r_symkeylen;
-  payload = safe_malloc(sizeof(unsigned char) * *payload_sz);
+  payload = safe_malloc(*payload_sz * sizeof *payload);
   if (payload == NULL)
     goto cleanup;
 

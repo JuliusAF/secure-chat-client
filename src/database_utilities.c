@@ -14,7 +14,7 @@ msg_components_t *assign_msg_components(sqlite3_stmt *res) {
   if (res == NULL)
     return NULL;
 
-  m = safe_malloc(sizeof(msg_components_t));
+  m = safe_malloc(sizeof *m);
   if (m == NULL)
     return NULL;
 
@@ -36,9 +36,9 @@ msg_components_t *assign_msg_components(sqlite3_stmt *res) {
   m->publen = sqlite3_column_bytes(res, 2);
   m->siglen = sqlite3_column_bytes(res, 3);
 
-  m->message = safe_malloc(sizeof(unsigned char) * m->msglen+1);
-  m->pubkey = safe_malloc(sizeof(char) * m->publen+1);
-  m->sig = safe_malloc(sizeof(unsigned char) * m->siglen+1);
+  m->message = safe_malloc(m->msglen+1 * sizeof *m->message);
+  m->pubkey = safe_malloc(m->publen+1 * sizeof *m->pubkey);
+  m->sig = safe_malloc(m->siglen+1 * sizeof *m->sig);
   if (m->message == NULL || m->pubkey == NULL || m->sig == NULL) {
     free_msg_components(m);
     return NULL;
@@ -69,11 +69,11 @@ msg_components_t *assign_msg_components(sqlite3_stmt *res) {
     m->s_symkeylen = sqlite3_column_bytes(res, 6);
     m->r_symkeylen = sqlite3_column_bytes(res, 7);
 
-    m->recipient = safe_malloc(sizeof(char) * m->reclen+1);
+    m->recipient = safe_malloc(m->reclen+1 * sizeof *m->recipient);
     /* IV size is constant, defined in IV_SIZE */
-    m->iv = safe_malloc(sizeof(unsigned char) * IV_SIZE+1);
-    m->s_symkey = safe_malloc(sizeof(unsigned char) * m->s_symkeylen+1);
-    m->r_symkey = safe_malloc(sizeof(unsigned char) * m->r_symkeylen+1);
+    m->iv = safe_malloc(IV_SIZE+1 * sizeof *m->iv);
+    m->s_symkey = safe_malloc(m->s_symkeylen+1 * sizeof *m->s_symkey);
+    m->r_symkey = safe_malloc(m->r_symkeylen+1 * sizeof *m->r_symkey);
     if (m->recipient == NULL || m->s_symkey == NULL || m->r_symkey == NULL || m->iv == NULL) {
       free_msg_components(m);
       return NULL;
@@ -147,11 +147,11 @@ void free_msg_components(msg_components_t *m) {
 amount of messages pulled from the databse */
 msg_queue_t *initialize_msg_queue(void) {
   const int size = 40;
-  msg_queue_t *queue = safe_malloc(sizeof(msg_queue_t));
+  msg_queue_t *queue = safe_malloc(sizeof *queue);
   if (queue == NULL)
     return NULL;
 
-  queue->messages = safe_malloc(sizeof(msg_components_t *) * size);
+  queue->messages = safe_malloc(size * sizeof *queue->messages);
   queue->size = size;
   queue->top = 0;
   queue->max_rowid = 0;

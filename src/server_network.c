@@ -15,7 +15,7 @@ packet_t *gen_s_error_packet(uint16_t id, char *err_msg) {
     return NULL;
 
   payload_sz = strlen(err_msg);
-  payload = safe_malloc(sizeof(unsigned char) * payload_sz);
+  payload = safe_malloc(payload_sz * sizeof *payload);
   if (payload == NULL)
     return NULL;
 
@@ -47,7 +47,7 @@ packet_t *gen_s_userinfo_packet(fetched_userinfo_t *f, uint16_t id) {
     return NULL;
   }
 
-  payload = safe_malloc(sizeof(unsigned char) * payload_sz);
+  payload = safe_malloc(payload_sz * sizeof *payload);
   header = initialize_header(id, payload_sz);
   if (payload == NULL || header == NULL) {
     free(header);
@@ -76,7 +76,7 @@ packet_t *gen_s_users_packet(char *users) {
     return NULL;
 
   header = initialize_header(S_MSG_USERS, strlen(users));
-  payload = safe_malloc(sizeof(unsigned char) * strlen(users));
+  payload = safe_malloc(strlen(users) * sizeof *payload);
   if (payload == NULL || header == NULL) {
     free(header);
     free(payload);
@@ -97,7 +97,7 @@ unsigned char *serialize_message(msg_components_t *m, unsigned int payload_sz) {
   if (m == NULL)
     return NULL;
 
-  payload = safe_malloc(sizeof(unsigned char) * payload_sz);
+  payload = safe_malloc(payload_sz * sizeof *payload);
   if (payload == NULL)
     return NULL;
 
@@ -173,7 +173,7 @@ packet_t *gen_s_msg_packet(msg_components_t *m) {
 unsigned char *serialize_pubkey_request(client_parsed_t *p, char *key, unsigned int len, unsigned int payload_sz) {
   unsigned char *payload, *tmp;
 
-  payload = safe_malloc(sizeof(unsigned char) * payload_sz);
+  payload = safe_malloc(payload_sz * sizeof *payload);
   if (payload == NULL)
     return NULL;
 
