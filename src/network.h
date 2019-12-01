@@ -42,11 +42,6 @@ a constant as a user command requires no information from the client */
 #define S_META_REGISTER_PASS 2103
 #define S_META_REGISTER_FAIL 2104
 #define S_META_PUBKEY_RESPONSE 2105
-#define S_META_MSG_COUNT 2106
-
-/* the S_META_MSG_COUNT has a fixed size, as it transmits only the number of packets
-the client is to expect for messages */
-#define META_MSG_COUNT_SIZE sizeof(unsigned int)
 
 typedef struct packet_header {
   uint32_t pckt_sz;

@@ -660,10 +660,6 @@ msg_queue_t *fetch_db_messages(client_t *client_info) {
       strlen(client_info->username) == 0)
     return NULL;
 
-  /*rowid = get_latest_msg_rowid();
-  if (rowid < 0)
-    return NULL;*/
-
   db = open_database();
   if (db == NULL)
     return NULL;

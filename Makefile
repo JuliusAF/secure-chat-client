@@ -1,33 +1,37 @@
-SERVER_SOURCES = src/server.c src/parse_client_input.c \
-								 src/safe_wrappers.c src/network.c \
-								 src/database.c src/server_utilities.c \
+# the following sources and headers are shared by both applications
+SHARED_SOURCES = src/safe_wrappers.c src/network.c \
 								 src/ssl-nonblock.c src/cryptography.c \
-								 src/server_network.c src/parse_user_input.c \
-								 src/database_utilities.c
-
-SERVER_HEADERS = src/safe_wrappers.h src/parse_client_input.h \
-								 src/network.h src/database.h src/parse_user_input.h \
-								 src/server_utilities.h src/ssl-nonblock.h \
-								 src/cryptography.h src/server_network.h \
-								 src/database_utilities.h
-
-CLIENT_SOURCES = src/client.c src/parse_server_input.c\
-								 src/safe_wrappers.c src/network.c \
-								 src/client_utilities.c src/ssl-nonblock.c \
-								 src/cryptography.c src/client_network.c \
 								 src/parse_user_input.c
 
-CLIENT_HEADERS = src/safe_wrappers.h src/parse_client_input.h\
-								 src/network.h src/client_utilities.h \
-								 src/ssl-nonblock.h src/cryptography.h \
-								 src/client_network.h src/parse_user_input.h
+SHARED_HEADERS = src/safe_wrappers.h src/parse_client_input.h \
+								 src/network.h src/parse_user_input.h \
+								 src/ssl-nonblock.h src/cryptography.h
+
+# the following sources are used by the server. All files not included in the shared variable
+# is unique to the server
+SERVER_SOURCES = src/server.c src/parse_client_input.c \
+								 src/database.c src/server_utilities.c \
+								 src/server_network.c src/database_utilities.c \
+								 $(SHARED_SOURCES)
+
+SERVER_HEADERS = src/database.h src/database_utilities.h \
+								 src/server_utilities.h src/server_network.h \
+								 $(SHARED_HEADERS)
+
+# the following sources are used by the client. All files not included in the shared variable
+# is unique to the client
+CLIENT_SOURCES = src/client.c src/client_utilities.c \
+								 src/client_network.c src/parse_server_input.c \
+								 $(SHARED_SOURCES)
+
+CLIENT_HEADERS = src/client_utilities.h src/client_network.h \
+								 $(SHARED_HEADERS)
 
 TARGETS = server client
 KEYS = ca-key.pem ca-cert.pem server-key.pem server-csr.pem server-ca-cert.pem
 META = Makefile README.md group.txt
 
 CFLAGS = -Wall -Wextra -std=gnu99 -g3
-LDFLAGS =
 LIBS = -lsqlite3 -lcrypto -lssl
 
 CC = gcc
@@ -51,7 +55,7 @@ clean:
 	rm -f src/*.o
 
 server: $(SERVER_SOURCES:.c=.o)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 $(SERVER_SOURCES:.c=.o): $(SERVER_HEADERS)
 
@@ -77,4 +81,5 @@ server-key.pem:
 
 copyfiles:
 	cp ttpkeys/ca-cert.pem clientkeys/
+	cp ttpkeys/ca-cert.pem serverkeys/
 	cp serverkeys/server-ca-cert.pem clientkeys/

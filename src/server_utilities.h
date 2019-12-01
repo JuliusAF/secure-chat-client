@@ -6,6 +6,7 @@
 #include "parse_client_input.h"
 #include "parse_user_input.h"
 
+/* defines the maximum number of clients that can connect to the server*/
 #define MAX_CLIENTS 30
 /* The server and workers communicate over the pipes.
 The communication between them, however, is very simple and

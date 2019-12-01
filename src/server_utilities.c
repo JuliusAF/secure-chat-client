@@ -471,13 +471,7 @@ void handle_db_msg_update(client_t *client_info) {
   if (queue == NULL || queue->top == 0) {
     free_msg_queue(queue);
     return;
-}
-  /*packet = gen_s_msgcount_packet(queue->top);
-  ret = send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
-  if (ret < 0) {
-    fprintf(stderr, "failed to send message count packet\n");
-    goto cleanup;
-  }*/
+  }
 
   for (unsigned int i = 0; i < queue->top; i++) {
     packet = gen_s_msg_packet(queue->messages[i]);

@@ -71,8 +71,9 @@ int main(int argc, const char* argv[]) {
   SSL_set_fd(ssl, socketfd);
 	if (ssl_block_connect(ssl, socketfd) != 1) {
     ERR_print_errors_fp(stderr);
-    fprintf(stderr, "verify result=%ld\n", SSL_get_verify_result(ssl));
-		printf("it is likely that the server has reached the maximum number of clients\n");
+    int err = SSL_get_verify_result(ssl);
+		if (err == 0)
+			printf("Server has reached the maximum number of clients\n");
     exit(EXIT_FAILURE);
   }
 

@@ -169,24 +169,6 @@ packet_t *gen_s_msg_packet(msg_components_t *m) {
   return pack_packet(header, payload);
 }
 
-/* creates a packet that tells the client how many messages it is to expect */
-packet_t *gen_s_msgcount_packet(unsigned int count) {
-  unsigned char *payload = NULL;
-  packet_hdr_t *header = NULL;
-
-  header = initialize_header(S_META_MSG_COUNT, META_MSG_COUNT_SIZE);
-  payload = safe_malloc(sizeof(unsigned char) * META_MSG_COUNT_SIZE);
-  if (payload == NULL || header == NULL) {
-    free(header);
-    free(payload);
-    return NULL;
-  }
-
-  memcpy(payload, &count, sizeof(unsigned int));
-
-  return pack_packet(header, payload);
-}
-
 /* serialized the response to a public key request from the client */
 unsigned char *serialize_pubkey_request(client_parsed_t *p, char *key, unsigned int len, unsigned int payload_sz) {
   unsigned char *payload, *tmp;

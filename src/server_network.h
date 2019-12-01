@@ -12,7 +12,6 @@ packet_t *gen_s_users_packet(char *users);
 a public or private message */
 unsigned char *serialize_message(msg_components_t *m, unsigned int payload_sz);
 packet_t *gen_s_msg_packet(msg_components_t *m);
-packet_t *gen_s_msgcount_packet(unsigned int count);
 unsigned char *serialize_pubkey_request(client_parsed_t *p, char *key, unsigned int len, unsigned int payload_sz);
 packet_t *gen_s_pubkey_rqst_packet(client_parsed_t *p, char *key, unsigned int len);
 

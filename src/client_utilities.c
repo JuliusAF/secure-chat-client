@@ -475,17 +475,21 @@ void handle_server_privmsg(server_parsed_t *p, user_t *u) {
 		encrypted_key = p->messages.s_symkey;
 	}
 
+	/* use the private key to decrypt the selected encrypted symmetric key */
 	decrypted_keylen = apply_rsa_decrypt(u->rsa_keys->privkey, u->rsa_keys->privlen, encrypted_keylen,
 																			encrypted_key, decrypted_key);
 	if (decrypted_keylen < 0)
 		return;
 	decrypted_key[decrypted_keylen] = '\0';
 
+	/* decrypt the encrypted message using the IV and the now decrypted symmetric key */
 	decrypted_msglen = apply_aes( (unsigned char *) decrypted_msg, p->messages.message, p->messages.msglen,
 															 decrypted_key, p->messages.iv, DECRYPT);
 	if (decrypted_msglen < 0)
 		return;
+	decrypted_msg[decrypted_msglen] = '\0';
 
+	/* writes the message to stout */
 	write(STDOUT_FILENO, decrypted_msg, decrypted_msglen);
 	write(STDOUT_FILENO, "\n", 1);
 }
