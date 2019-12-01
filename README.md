@@ -4,7 +4,7 @@ The database contains two tables; USERS and MESSAGES respectively. It is created
 
 The database.c and database_utilities.c source files deal with accessing and modifying the database. The functions titled handle_db_* access the database to set or check some state. The fetch_db_* functions fetch some data from the database into an appropriate data structure.
 
-Accessing the database is done using prepared statements and the sqlite3 bind_ interface. The should effectively remove the danger of SQL injections.
+Accessing the database is done using prepared statements and the sqlite3 bind_ interface. This should effectively remove the danger of SQL injections.
 
 ### USERS:
 
@@ -38,15 +38,15 @@ The MESSAGES table contains the following fields:
 
 The signature stored is the signature that was created when the packet was sent from the client to the server. The packet structure is preserved between client and server when a message is fetched, and the signature is used to validate that the user created the packet.
 
-The initialization vector and symmetric keys are used in conjunction with private messages to retain end-to-end encryption. The message is ecnrypted using a symmetric key, which is then RSA encrypted and stored in the database such that only the sender and recipient may decrypt them.
+The initialization vector and symmetric keys are used in conjunction with private messages to retain end-to-end encryption. The message is encrypted using a symmetric key, which is then RSA encrypted and stored in the database such that only the sender and recipient may decrypt them.
 
 # CRYPTOGRAPHY:
 
 Various cryptography protocols are adopted in order to meet the security requirements.
 
-SSL is utilized to verify the server when a client connects to it. This ensures the integrity of data sent from client to server. The client verifies both the server certificate (copied from the serverkeys directory to the clientkeys directory when MAKE is called) and the common name of the expected server with that of the name in the certificate. The expected common name is stored in cryptography.h (it is server.example.com). The SSL connection is established on the server side in server_utilities.c in function worker(), while on the client side it is started in main().
+SSL is utilized to verify the server when a client connects to it. This ensures the integrity of data sent from server to client. The client verifies both the server certificate (copied from the serverkeys directory to the clientkeys directory when MAKE is called) and the common name of the expected server with that of the name in the certificate. The expected common name is stored in cryptography.h (it is server.example.com). The SSL connection is established on the server side in server_utilities.c in function worker(), while on the client side it is started in main().
 
-Whenever a user logs in, they create a master key that is a function of the submitted plaintext username and password; this is done in cryptography.c with the function gen_master_key(). This masterkey is used to encrypt and decrypt the RSA key pair (created using create_rsa_pair() in cryptography.c) that belongs to that user using AES-128-CBC encryption defined in apply_aes() in 'cryptography.c'. This key pair is stored in the database and retrieved on login. The plaintext password is never saved, nor is it transmitted to the server. As such, the only way the masterkey can be computed is on the client side when a register or login command is invoked. The encryption method used is AES-128-CBC and utilizes a random initialization vector (created using create_rand_Salt() in cryptography.c) that is also stored on the server. This means the server cannot decrypt the key pair.
+Whenever a user logs in, they create a master key that is a function of the submitted plaintext username and password; this is done in cryptography.c with the function gen_master_key(). This masterkey is used to encrypt and decrypt the RSA key pair (created using create_rsa_pair() in cryptography.c) that belongs to that user using AES-128-CBC encryption defined in apply_aes() in cryptography.c. This key pair is stored in the database and retrieved is on login. The plaintext password is never saved, nor is it transmitted to the server. As such, the only way the masterkey can be computed is on the client side when a register or login command is invoked. The encryption method used is AES-128-CBC and utilizes a random initialization vector (created using create_rand_salt() in cryptography.c) that is also stored on the server. This means the server cannot decrypt the key pair.
 
 The password of a user is hashed twice (using hash_password() in cryptography.c):
 
@@ -68,17 +68,19 @@ The server can therefore not decrypt a private message, and in the event of a da
 
 Message verification:
 
-When a public or private message is received, the order of the packet is preserved from client to server and server to client. This means the signature of the original packet sent from client to server can be verified to check the identity of the sender. This is done in the function verify_client_payload() in client_utilities.h.
+When a public or private message is received, the order of the packet is preserved from client to server and server to client. This means the signature of the original packet sent from client to server can be verified to check the identity of the sender. This is done in the function verify_client_payload() in client_utilities.c.
 
 Signatures:
 
-Packets from clients to servers are signed where appropriate. That is: a login or register request is not signed, as the client does not have their key pair yet. The authentication offered by the password is assumed to be enough.The exit command is not transmitted over the network. The other types of messages are signed by the client. The signing on the client side is done in sign_client_packet() in client_utilities.c. On the server side, the is_client_sig_good() function verifies a client's signature;
+Packets from clients to servers are signed where appropriate (it is the hash of the payload that is signed). That is: a login or register request is not signed, as the client does not have their key pair yet. The authentication offered by the password is assumed to be enough.The exit command is not transmitted over the network. The other types of messages are signed by the client. The signing on the client side is done in sign_client_packet() in client_utilities.c. On the server side, the is_client_sig_good() function verifies a client's signature;
+
+Messages from server to client are not signed, as the usage of SSL should add the properties of authentication and integrity already.
 
 # PROTOCOL:
 
 The messages sent from server to client and from client to server differ depending on the type of message sent. However, each packet has a fixed header as described below:
 
-The size of the header is defined in network.h under HEADER_SIZE
+The size of the header is defined in network.h under HEADER_SIZE.
 The header consists of:
 
 - 4 bytes for length of data
@@ -92,7 +94,7 @@ The following section describes the types of packets sent from client to server.
 
 ### Exit command:
 
-The exit command need not be transmitted over the server although it can be. A client side exit will still be noticed on the server side with read().
+The exit command need not be transmitted over the server, although it can be. A client side exit will still be noticed on the server side through read().
 
 ### Register command:
 
@@ -125,7 +127,7 @@ The identification for a login command from the client is C_MSG_LOGIN
 
 When a user wants to transmit a private message, they must first ask the server for the recipient's public key. When the client does this, it also sends with it the information it wants to transmit. This is done so that it need not be buffered/saved in memory across commands. The message is formatted client side using create_formatted_msg() in client_network.c. The process is as follows:
 
-Using the master key created at login time, it encrypts the private message with AES-128-CBC (using an initialization vector). This ensures that the server, should it try to, can not decrypt the message. This information, along with the recipient's name whose public key is request, is sent to the server that processes the request. The return value from the server includes all the information sent from the client, as well as the public key and the signature of the original packet. The order is preserved. The signature can thus be checked by the client to make sure the data it sent over remained unchanged. This request is made with gen_c_pubkey_rqst_packet() in client_network.c.
+Using the master key created at login time, it encrypts the private message with AES-128-CBC (using an initialization vector). This ensures that the server, should it try to, can not decrypt the message. This information, along with the recipient's name whose public key is requested, is sent to the server that processes the request. The return value from the server includes all the information sent from the client, as well as the public key and the signature of the original packet. The order is preserved. The signature can thus be checked by the client to make sure the data it sent over remained unchanged. This request is made with gen_c_pubkey_rqst_packet() in client_network.c.
 
 The identification is defined in C_META_PUBKEY_RQST. The makeup of the packet is as follows:
 
@@ -151,7 +153,7 @@ The identification is C_MSG_PRIVMSG.
 
 ### Public message command:
 
-A public message does not need to be encrypted. The public key of the user who sent the message is added as well so that when clients receive the packet from the server, they can verify the users identity. The make up is as follows:
+A public message does not need to be encrypted. The public key of the user who sent the message is added as well so that when clients receive the packet from the server, they can verify the users identity. This packet is created using gen_c_pubmsg_packet(). The make up is as follows:
 
 The identification code is C_MSG_PUBMSG
 
@@ -174,7 +176,7 @@ The server only ever writes to the client in response to client input. As such, 
 
 When an error occurs that the user should be made aware of, an error message is sent to the client. Other than when a register or login fails, all error messages have the id S_MSG_GENERIC_ERR. All error messages are created using gen_s_error_packet() in server_network.c. The makeup is simple:
 
-- Variable size for the error message. The size of the message is thus the size of the pyload stored in the header.
+- Variable size for the error message. The size of the message is thus the size of the payload stored in the header.
 
 ### Exit command:
 
@@ -182,7 +184,7 @@ Nothing is written to the client.
 
 ### Register command:
 
-A register command can either succeed of fail depending on whether the given username is reserved or the user is logged on (although this is also checked client side, so these errors should not occur).
+A register command can either succeed of fail depending on whether the given username is reserved or the user is logged on (although this is also checked client side, so this error should not occur).
 
 ##### On register success:
 
@@ -302,5 +304,6 @@ The following security goals have been addressed:
   - The functions in these files, when dealing with memory (such as memcpy()), always check that a read/copy does not exceed the appointed memory.
   - Wherever possible, functions are used that explicitly specify the size of the operation.
   - There are (as far as I have found) no memory leaks in an active running process. (If the program is killed, some memory is leaked.)
+  - Sizes are explicitly checked. The function to read from a socket ensures that the specified data is read. A packet header's payload size is thus ensured to be accurate.
 
 - The programs do not modify any files other than chat.db (for the server) and files in the clientkeys directory. The CA and server certificates are created when make is called.

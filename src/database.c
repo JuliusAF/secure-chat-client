@@ -802,7 +802,6 @@ char *fetch_db_pubkey(char *name, unsigned int *fetchlen, char *err) {
   }
   else {
     strcpy(err, "there is no user by this name");
-    printf("reached here?\n");
   }
 
   cleanup:
