@@ -45,7 +45,7 @@ msg_components_t *assign_msg_components(sqlite3_stmt *res) {
   else
     m->type = PRIV_MSG_TYPE;
 
-  printf("reaches msg1\n");
+
   /* find lengths of the character arrays for all messages */
   m->msglen = sqlite3_column_bytes(res, 1);
   m->certlen = sqlite3_column_bytes(res, 2);
@@ -53,7 +53,7 @@ msg_components_t *assign_msg_components(sqlite3_stmt *res) {
   /* check that size of username doesnt exceed max */
   if (sqlite3_column_bytes(res, 4) > USERNAME_MAX)
     return NULL;
-printf("reaches msg2\n");
+
   m->message = safe_malloc(m->msglen+1 * sizeof *m->message);
   m->cert = safe_malloc(m->certlen+1 * sizeof *m->cert);
   m->sig = safe_malloc(m->siglen+1 * sizeof *m->sig);
@@ -62,26 +62,25 @@ printf("reaches msg2\n");
     free_msg_components(m);
     return NULL;
   }
-printf("reaches msg3\n");
+
   /* copy the components that are always in a msg_components_t struct into their
   respective fields */
   tmp = sqlite3_column_blob(res, 1);
   memcpy(m->message, tmp, m->msglen);
   m->message[m->msglen] = '\0';
-printf("reaches msg4\n");
-printf("inside fetch msglen: %d\n", m->msglen);
+
   tmp = sqlite3_column_blob(res, 2);
   memcpy(m->cert, tmp, m->certlen);
   m->cert[m->certlen] = '\0';
-printf("reaches msg5\n");
+
   tmp = sqlite3_column_blob(res, 3);
   memcpy(m->sig, tmp, m->siglen);
   m->sig[m->siglen] = '\0';
-printf("reaches msg6\n");
+
   tmp = sqlite3_column_text(res, 4);
   memset(m->sender, '\0', USERNAME_MAX+1);
   memcpy(m->sender, tmp, sqlite3_column_bytes(res, 4));
-printf("reaches msg7\n");
+  
   /* if the message is private, add the components needs for a private message */
   if (m->type == PRIV_MSG_TYPE) {
     /* find the lengths of the extra componenets needed for private messages */

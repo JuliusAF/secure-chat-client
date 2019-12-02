@@ -178,9 +178,6 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   parsed->messages.sig[parsed->messages.siglen] = '\0';
   tmp += parsed->messages.siglen;
 
-printf("\n\nclient siglen: %d\n\n", parsed->messages.siglen);
-  printf("message size: %ld\n\n\n", (packet->header->pckt_sz - sizeof(int) - parsed->messages.siglen));
-
   /* the original payload that was sent to the server when a public/private message
   was made was signed by that client. That payload must be found now and hashed, in order
   to verify the signature. The pointer tmp at its current position points to that original payload */
@@ -203,7 +200,7 @@ printf("\n\nclient siglen: %d\n\n", parsed->messages.siglen);
   memcpy(parsed->messages.cert, tmp, parsed->messages.certlen);
   parsed->messages.cert[parsed->messages.certlen] = '\0';
   tmp += parsed->messages.certlen;
-printf("\n\nclient certlen: %d\n\n", parsed->messages.certlen);
+
   if ((tmp + USERNAME_MAX) > tmpend)
     return -1;
   parsed->messages.sender = safe_malloc(USERNAME_MAX+1 * sizeof *parsed->messages.sender);
@@ -225,7 +222,7 @@ printf("\n\nclient certlen: %d\n\n", parsed->messages.certlen);
   memcpy(parsed->messages.message, tmp, parsed->messages.msglen);
   parsed->messages.message[parsed->messages.msglen] = '\0';
   tmp += parsed->messages.msglen;
-printf("\n\nclient msglen: %d\n\n", parsed->messages.msglen);
+  
   /* Now only private messages have more input. This is checked here */
   if (parsed->id == S_MSG_PRIVMSG) {
     /* input the recipient into the appropriate variable. This field has a constant
@@ -300,18 +297,18 @@ int parse_server_pubkey_response(packet_t *packet, server_parsed_t *parsed) {
   /* check if reading the size of the key causes buffer overflow, if not copy it */
   if ((tmp + sizeof(unsigned int)) > tmpend)
     return -1;
-  memcpy(&parsed->pubkey_response.keylen, tmp, sizeof(unsigned int));
+  memcpy(&parsed->pubkey_response.certlen, tmp, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
 
   /* check if reading the key causes buffer overflow, if not copy it */
-  if ((tmp + parsed->pubkey_response.keylen) > tmpend)
+  if ((tmp + parsed->pubkey_response.certlen) > tmpend)
     return -1;
-  parsed->pubkey_response.key = safe_malloc(parsed->pubkey_response.keylen+1 * sizeof *parsed->pubkey_response.key);
-  if (parsed->pubkey_response.key == NULL)
+  parsed->pubkey_response.cert = safe_malloc(parsed->pubkey_response.certlen+1 * sizeof *parsed->pubkey_response.cert);
+  if (parsed->pubkey_response.cert == NULL)
     return -1;
-  memcpy(parsed->pubkey_response.key, tmp, parsed->pubkey_response.keylen);
-  parsed->pubkey_response.key[parsed->pubkey_response.keylen] = '\0';
-  tmp += parsed->pubkey_response.keylen;
+  memcpy(parsed->pubkey_response.cert, tmp, parsed->pubkey_response.certlen);
+  parsed->pubkey_response.cert[parsed->pubkey_response.certlen] = '\0';
+  tmp += parsed->pubkey_response.certlen;
 
   /* copy the size of the signature and the signature into their respective variables */
   if ((tmp + sizeof(unsigned int)) > tmpend)
@@ -447,7 +444,7 @@ void initialize_server_parsed(server_parsed_t *p) {
       p->error_message = NULL;
       break;
     case S_META_PUBKEY_RESPONSE:
-      p->pubkey_response.key = NULL;
+      p->pubkey_response.cert = NULL;
       p->pubkey_response.sig = NULL;
       p->pubkey_response.hashed_payload = NULL;
       p->pubkey_response.username = NULL;
@@ -512,7 +509,7 @@ bool is_server_parsed_legal(server_parsed_t *p) {
         return false;
       break;
     case S_META_PUBKEY_RESPONSE:
-      if (p->pubkey_response.key == NULL ||
+      if (p->pubkey_response.cert == NULL ||
           p->pubkey_response.sig == NULL ||
           p->pubkey_response.hashed_payload == NULL ||
           p->pubkey_response.username == NULL ||
@@ -566,7 +563,7 @@ void free_server_parsed(server_parsed_t *p) {
       free(p->error_message);
       break;
     case S_META_PUBKEY_RESPONSE:
-      free(p->pubkey_response.key);
+      free(p->pubkey_response.cert);
       free(p->pubkey_response.sig);
       free(p->pubkey_response.hashed_payload);
       free(p->pubkey_response.username);

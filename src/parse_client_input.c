@@ -46,7 +46,6 @@ client_parsed_t *parse_client_input(packet_t *p) {
       break;
     case C_MSG_PUBMSG:
       ret = parse_client_pubmsg(p, parsed);
-      print_hex(parsed->pubmsg_packet.sig, parsed->pubmsg_packet.siglen);
       break;
     case C_MSG_USERS:
       ret = parse_client_users(p, parsed);
@@ -267,6 +266,8 @@ int parse_client_pubkey_rqst(packet_t *packet, client_parsed_t *parsed) {
   validity of a server response to the request */
   parsed->pubkey_rqst.siglen = packet->header->siglen;
   parsed->pubkey_rqst.sig = safe_malloc(parsed->pubkey_rqst.siglen+1 * sizeof *parsed->pubkey_rqst.sig);
+  if (parsed->pubkey_rqst.sig == NULL)
+    return -1;
   memcpy(parsed->pubkey_rqst.sig, packet->header->sig, parsed->pubkey_rqst.siglen);
   parsed->pubkey_rqst.sig[parsed->pubkey_rqst.siglen] = '\0';
 
@@ -300,7 +301,7 @@ Returns:
 -1 on failure */
 int parse_client_privmsg(packet_t *packet, client_parsed_t *parsed) {
   unsigned char *tmp, *tmpend;
-  unsigned int size, keylen;
+  unsigned int size, certlen;
 
   size = packet->header->pckt_sz;
   tmp = packet->payload;
@@ -317,11 +318,16 @@ int parse_client_privmsg(packet_t *packet, client_parsed_t *parsed) {
   /* read the size of the key and skip over it. It is not needed on the server side */
   if ((tmp + sizeof(unsigned int)) > tmpend)
     return -1;
-  memcpy(&keylen, tmp, sizeof(unsigned int));
+  memcpy(&certlen, tmp, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
-  if ((tmp + keylen) > tmpend)
+  if ((tmp + certlen) > tmpend)
     return -1;
-  tmp += keylen;
+  tmp += certlen;
+
+  /* the username does not need to be copied and is skipped over */
+  if ((tmp + USERNAME_MAX) > tmpend)
+    return -1;
+  tmp += USERNAME_MAX;
 
   /* reads the message into the parse struct */
   if ((tmp + sizeof(unsigned int)) > tmpend)

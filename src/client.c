@@ -134,12 +134,11 @@ int main(int argc, const char* argv[]) {
 			packet = deserialize_packet(server_output, bytes_read);
 			if (packet == NULL)
 				goto cleanup;
-			printf("reaches client parse \n");
+				
 			parsed = parse_server_input(packet);
 			if (parsed == NULL)
 				goto cleanup;
 
-			printf("reaches client server handle \n");
 			handle_server_input(parsed, user, request);
 
 			cleanup:

@@ -109,7 +109,6 @@ void sign_client_packet(packet_t *p, user_t *u) {
 	else
 		p->header->siglen = ret;
 
-	print_hex(p->header->sig, p->header->siglen);
 	cleanup:
 
 	free(hash);
@@ -127,18 +126,15 @@ bool verify_client_payload(char *cert, unsigned int certlen, char* sender,
 
 	if (cert == NULL || sender == NULL || s == NULL || hash == NULL)
 		return false;
-printf("cert: %s\n", cert);
-printf("sender: %sEND\n", sender);
+
 	ret = verify_x509_certificate(cert, certlen, sender);
 	if (!ret)
 		return false;
-printf("reaches ver2\n");
+
 	pubkey = obtain_pubkey_from_x509(cert, certlen, &publen);
 	if (pubkey == NULL)
 		return false;
-print_hex(s, slen);
-printf("hash\n");
-print_hex(hash, SHA256_DIGEST_LENGTH);
+
 	bio = BIO_new_mem_buf(pubkey, publen);
 	if (bio == NULL)
 		return false;
@@ -146,7 +142,7 @@ print_hex(hash, SHA256_DIGEST_LENGTH);
   key = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
 
   ret = rsa_verify_sha256(key, s, hash, slen, SHA256_DIGEST_LENGTH);
-printf("reaches ver4\n");
+
 	free(pubkey);
 	BIO_free(bio);
   return ret;
@@ -432,6 +428,7 @@ void handle_server_pubmsg(server_parsed_t *p, user_t *u) {
 associated with the request, reencrypts it for both itself and the recipient, and sends the message
 back to the server */
 void handle_server_pubkey_response(server_parsed_t *p, user_t *u) {
+	bool verified;
 	int ret;
 	packet_t *packet = NULL;
 
@@ -441,17 +438,22 @@ void handle_server_pubkey_response(server_parsed_t *p, user_t *u) {
 		fprintf(stderr, "authors of packet don't match\n");
 	}
 
+	verified = verify_x509_certificate(p->pubkey_response.cert, p->pubkey_response.certlen, p->pubkey_response.username);
+	if (!verified) {
+		fprintf(stderr, "failed to get recipients certificate\n");
+	}
+
 	/* the encryption of the message is done in this function and the ones it calls */
 	packet = gen_c_privmsg_packet(p, u);
 	if (packet == NULL)
 		return;
+
 
 	sign_client_packet(packet, u);
 	ret = send_packet_over_socket(u->ssl, u->connfd, packet);
 	if (ret < 1)	{
 		fprintf(stderr, "failed to send user /users packet\n");
 	}
-
 }
 
 /* this messages handles a private message from the server. It decrypts the symmetric key
@@ -462,13 +464,14 @@ void handle_server_privmsg(server_parsed_t *p, user_t *u) {
 	char decrypted_msg[MAX_PACKET_SIZE] = "";
 	int decrypted_msglen, decrypted_keylen;
 	unsigned int encrypted_keylen;
+
 	/* verify the signature of the original payload */
 	if (!verify_client_payload(p->messages.cert, p->messages.certlen, p->messages.sender,
 			p->messages.sig, p->messages.siglen, p->messages.hashed_payload)) {
 		fprintf(stderr, "author of message doesn't match\n");
 		return;
 	}
-
+	
 	/* check if logged in user is the recipient of the message. If they are, use the recipients
 	symmetric key, otherwise use the senders */
 	if(strncmp(u->username, p->messages.recipient, USERNAME_MAX) == 0) {
@@ -543,10 +546,6 @@ void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
 	u->rsa_keys = keys;
 	u->is_logged = true;
 	r->is_request_active = false;
-
-	printf("privkey: %s\n", u->rsa_keys->privkey);
-	printf("pubkey: %s\n", u->rsa_keys->pubkey);
-	printf("cert: %s\n", u->rsa_keys->cert);
 
 	if (p->id == S_META_LOGIN_PASS)
 		printf("authentification succeeded\n");

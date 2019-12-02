@@ -105,20 +105,20 @@ unsigned char *serialize_message(msg_components_t *m, unsigned int payload_sz) {
   memcpy(tmp, &m->siglen, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
   memcpy(tmp, m->sig, m->siglen);
-  printf("\n\nserver siglen: %d\n\n", m->siglen);
   tmp += m->siglen;
+
   memcpy(tmp, &m->certlen, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
   memcpy(tmp, m->cert, m->certlen);
-  printf("\n\nserver certlen: %d\n\n", m->certlen);
   tmp += m->certlen;
+
   memset(tmp, '\0', USERNAME_MAX);
   memcpy(tmp, m->sender, strlen(m->sender));
   tmp += USERNAME_MAX;
+
   memcpy(tmp, &m->msglen, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
   memcpy(tmp, m->message, m->msglen);
-  printf("\n\nserver msglen: %d\n\n", m->msglen);
   tmp += m->msglen;
 
   /* if the message is private, more fields must be added. This is done here */
@@ -130,10 +130,12 @@ unsigned char *serialize_message(msg_components_t *m, unsigned int payload_sz) {
 
     memcpy(tmp, m->iv, IV_SIZE);
     tmp += IV_SIZE;
+
     memcpy(tmp, &m->s_symkeylen, sizeof(unsigned int));
     tmp += sizeof(unsigned int);
     memcpy(tmp, m->s_symkey, m->s_symkeylen);
     tmp += m->s_symkeylen;
+    
     memcpy(tmp, &m->r_symkeylen, sizeof(unsigned int));
     tmp += sizeof(unsigned int);
     memcpy(tmp, m->r_symkey, m->r_symkeylen);

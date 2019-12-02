@@ -439,7 +439,7 @@ bool verify_x509_certificate(char *cert, unsigned int certlen, char *username) {
   ret = X509_verify_cert(x509_store_ctx);
   if (ret != 1)
     goto cleanup;
-    
+
   /* retrieve the common name from the user certificate and check it with the expected name */
   x509_name = X509_get_subject_name(x509_certificate);
   if (x509_name == NULL)
@@ -573,12 +573,17 @@ int apply_rsa_encrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigne
   int ret = -1;
   RSA *rsa = NULL;
   BIO *bio = NULL;
+  EVP_PKEY *key;
 
   bio = BIO_new_mem_buf(pkey, plen);
   if (bio == NULL)
     goto cleanup;
 
-  rsa = PEM_read_bio_RSAPublicKey(bio, NULL, NULL, NULL);
+  key = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
+  if (key == NULL)
+    goto cleanup;
+
+  rsa = EVP_PKEY_get1_RSA(key);
   if (rsa == NULL)
     goto cleanup;
 
@@ -588,6 +593,7 @@ int apply_rsa_encrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigne
 
   cleanup:
 
+  EVP_PKEY_free(key);
   BIO_free_all(bio);
   RSA_free(rsa);
   return ret;

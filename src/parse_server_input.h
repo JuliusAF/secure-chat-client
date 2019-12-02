@@ -54,8 +54,8 @@ typedef struct parsed_server_input {
     /* contains the certificate asked for and the message(encrypted) that
     required that certificate */
     struct {
-      unsigned int keylen;
-      char *key;
+      unsigned int certlen;
+      char *cert;
       unsigned int siglen;
       unsigned char *sig;
       unsigned char *hashed_payload;

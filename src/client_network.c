@@ -350,7 +350,6 @@ unsigned char *serialize_pubmsg(char *message, user_t *u, unsigned int payload_s
   memcpy(tmp, &u->rsa_keys->certlen, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
   memcpy(tmp, u->rsa_keys->cert, u->rsa_keys->certlen);
-  printf("\n\nclient send certlen: %d\n\n", u->rsa_keys->certlen);
   tmp += u->rsa_keys->certlen;
   memset(tmp, '\0', USERNAME_MAX);
   memcpy(tmp, u->username, strlen(u->username));
@@ -358,7 +357,6 @@ unsigned char *serialize_pubmsg(char *message, user_t *u, unsigned int payload_s
   memcpy(tmp, &s, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
   memcpy(tmp, message, s);
-  printf("\n\nclient send msglen: %d\n\n", s);
 
   return payload;
 }
@@ -404,6 +402,7 @@ unsigned char *serialize_pubkey_rqst(command_t *n, user_t *u, unsigned int *payl
   iv = create_rand_salt(IV_SIZE);
   if (iv == NULL)
     return NULL;
+    
   /* create the formatted message with date etc. */
   memset(msg, '\0', max);
   ret = create_formatted_msg(msg, n, u);
@@ -469,6 +468,8 @@ unsigned char *serialize_privmsg(server_parsed_t *p, user_t *u, unsigned int *pa
   unsigned char *payload = NULL, *iv = NULL, *symkey = NULL, *tmp,
   s_symkey[max], r_symkey[max], encrypted_msg[max], decrypted[max];
   int decrypt_sz, s_symkeylen, r_symkeylen, encryptedlen;
+  char *r_pubkey = NULL;
+  unsigned int r_pubkeylen;
 
   /*  decrypt message from server */
   memset(decrypted, '\0', max);
@@ -498,13 +499,20 @@ unsigned char *serialize_privmsg(server_parsed_t *p, user_t *u, unsigned int *pa
   if (s_symkeylen < 0)
     goto cleanup;
 
+  /* the certificate is verified, so here the public key is extracted and
+  used to sign the recipients symmetric key*/
+
+  r_pubkey = obtain_pubkey_from_x509(p->pubkey_response.cert, p->pubkey_response.certlen, &r_pubkeylen);
+  if (r_pubkey == NULL)
+    goto cleanup;
+
   /* encrypt the symmetric key with the recipient's public key */
-  r_symkeylen = apply_rsa_encrypt(p->pubkey_response.key, p->pubkey_response.keylen, SYMKEY_SIZE, symkey, r_symkey);
+  r_symkeylen = apply_rsa_encrypt(r_pubkey, r_pubkeylen, SYMKEY_SIZE, symkey, r_symkey);
   if (r_symkeylen < 0)
     goto cleanup;
 
   /* calculate the size of the packet as described in the README.md */
-  *payload_sz = sizeof(unsigned int) + u->rsa_keys->publen + sizeof(unsigned int) + encryptedlen +
+  *payload_sz = sizeof(unsigned int) + u->rsa_keys->certlen + sizeof(unsigned int) + encryptedlen + USERNAME_MAX +
                 USERNAME_MAX + IV_SIZE + sizeof(unsigned int) + s_symkeylen + sizeof(unsigned int) + r_symkeylen;
   payload = safe_malloc(*payload_sz * sizeof *payload);
   if (payload == NULL)
@@ -513,10 +521,13 @@ unsigned char *serialize_privmsg(server_parsed_t *p, user_t *u, unsigned int *pa
   tmp = payload;
 
   /* copy the fields into the payload */
-  memcpy(tmp, &u->rsa_keys->publen, sizeof(unsigned int));
+  memcpy(tmp, &u->rsa_keys->certlen, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
-  memcpy(tmp, u->rsa_keys->pubkey, u->rsa_keys->publen);
-  tmp += u->rsa_keys->publen;
+  memcpy(tmp, u->rsa_keys->cert, u->rsa_keys->certlen);
+  tmp += u->rsa_keys->certlen;
+  memset(tmp, '\0', USERNAME_MAX);
+  memcpy(tmp, u->username, strnlen(u->username, USERNAME_MAX));
+  tmp += USERNAME_MAX;
   memcpy(tmp, &encryptedlen, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
   memcpy(tmp, encrypted_msg, encryptedlen);
@@ -536,6 +547,7 @@ unsigned char *serialize_privmsg(server_parsed_t *p, user_t *u, unsigned int *pa
 
   cleanup:
 
+  free(r_pubkey);
   free(iv);
   free(symkey);
   return payload;

@@ -164,8 +164,8 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
       packet = deserialize_packet(input, bytes_read);
       if (packet == NULL)
         goto cleanup;
-      printf("reaches server\n");
-      printf("message size: %d\n\n\n", packet->header->pckt_sz);
+
+
       /* check that a login condition is satisfies and if it is check the signature of
       a packet for all appropriate instances */
       if (!is_login_cond_satisfied(packet, client_info)) {
@@ -178,7 +178,7 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
         send_packet_over_socket(ssl, connfd, packet1);
         goto cleanup;
       }
-      printf("reaches server parse\n");
+
       /* parse a packet */
       parsed = parse_client_input(packet);
       if (parsed == NULL) {
@@ -186,7 +186,7 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
         send_packet_over_socket(ssl, connfd, packet);
         goto cleanup;
       }
-      printf("reaches server handle \n");
+
       /* handle the request made by the client */
       handle_client_input(parsed, client_info, to_parent[1]);
 
@@ -255,14 +255,13 @@ bool is_client_sig_good(packet_t *p, client_t *c) {
 
   /* hash the payload. The hashed payload is what was originally signed */
   hash = hash_input( (char *) p->payload, p->header->pckt_sz);
-  printf("hash:\n");
-  print_hex(hash, SHA256_DIGEST_LENGTH);
+
   bio = BIO_new_mem_buf(pubkey, publen);
   if (bio == NULL) {
     free(pubkey);
     return false;
   }
-  print_hex(p->header->sig, p->header->siglen);
+
   key = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
 
   ret = rsa_verify_sha256(key, p->header->sig, hash, p->header->siglen, SHA256_DIGEST_LENGTH);
@@ -414,7 +413,6 @@ void handle_client_pubmsg(client_parsed_t *p, client_t *client_info, int pipefd)
   ret = handle_db_pubmsg(p, client_info);
   if (ret < 1)
     fprintf(stderr, "pubmsg database failure\n");
-  printf("reaches server update\n");
 
   write(pipefd, PIPE_MSG_UPDATE, PIPE_MSG_LEN);
 }
@@ -488,13 +486,13 @@ void handle_db_msg_update(client_t *client_info) {
 
   if (client_info == NULL || !client_info->is_logged)
     return;
-  printf("reaches 123\n");
+
   queue = fetch_db_messages(client_info);
   if (queue == NULL || queue->top == 0) {
     free_msg_queue(queue);
     return;
   }
-  printf("reaches db fetch\n");
+
   for (unsigned int i = 0; i < queue->top; i++) {
     packet = gen_s_msg_packet(queue->messages[i]);
     ret = send_packet_over_socket(client_info->ssl, client_info->connfd, packet);

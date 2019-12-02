@@ -492,7 +492,7 @@ int handle_db_pubmsg(client_parsed_t *parsed, client_t *client_info) {
     goto cleanup;
 
   sql = "INSERT INTO MESSAGES VALUES(?1, NULL, ?2, ?3, NULL, NULL, NULL)";
-printf("database function msglen: %d", parsed->pubmsg_packet.msg_sz);
+  
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK) {
     sqlite3_bind_text(res, 1, client_info->username, -1, SQLITE_STATIC);
@@ -672,11 +672,11 @@ msg_queue_t *fetch_db_messages(client_t *client_info) {
   step = sqlite3_step(res);
   if (step != SQLITE_ROW)
     goto cleanup;
-  printf("reaches here\n");
+
   while (step == SQLITE_ROW) {
     cmps = assign_msg_components(res);
     if (cmps != NULL) {
-      printf("reaches now?\n");
+
       rowid = (signed long long) sqlite3_column_int64(res, 0);
       ret = add_msg_component(queue, cmps);
       if (ret < 0) {
