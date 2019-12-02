@@ -38,8 +38,9 @@ typedef struct parsed_server_input {
       unsigned int siglen;
       unsigned char *sig;
       unsigned char *hashed_payload;
-      unsigned int publen;
-      char *pubkey;
+      unsigned int certlen;
+      char *cert;
+      char *sender;
       unsigned int msglen;
       unsigned char *message;
       /* fields for private messages */
@@ -50,8 +51,8 @@ typedef struct parsed_server_input {
       unsigned int r_symkeylen;
       unsigned char *r_symkey;
     } messages;
-    /* contains the public key asked for and the message(encrypted) that
-    required that public key */
+    /* contains the certificate asked for and the message(encrypted) that
+    required that certificate */
     struct {
       unsigned int keylen;
       char *key;

@@ -46,6 +46,7 @@ client_parsed_t *parse_client_input(packet_t *p) {
       break;
     case C_MSG_PUBMSG:
       ret = parse_client_pubmsg(p, parsed);
+      print_hex(parsed->pubmsg_packet.sig, parsed->pubmsg_packet.siglen);
       break;
     case C_MSG_USERS:
       ret = parse_client_users(p, parsed);
@@ -197,7 +198,7 @@ int parse_client_users(packet_t *packet, client_parsed_t *parsed) {
   return 1;
 }
 
-/* parses a public message packet. The public key that is provided with the message
+/* parses a public message packet. The certificate that is provided with the message
 is ignored as a copy already exists in the database
 Returns:
 1 on success
@@ -210,16 +211,22 @@ int parse_client_pubmsg(packet_t *packet, client_parsed_t *parsed) {
   total = packet->header->pckt_sz;
   tmpend = tmp + total;
 
-  /* this reads the size of the key and skips over it, as it is not needed on the
+  /* this reads the size of the certificate and skips over it, as it is not needed on the
   server side */
   if ((tmp + sizeof(unsigned int)) > tmpend)
     return -1;
   memcpy(&publen, tmp, sizeof(unsigned int));
-  tmp += (sizeof(unsigned int) + publen);
-  /* check if the length of public key and size of length exceeds the pointer limit */
+  tmp += publen + sizeof(unsigned int);
+  /* check if the length of certificate exceeds the pointer limit */
   if (tmp > tmpend)
     return -1;
 
+  /* skip over the username */
+  if ((tmp + USERNAME_MAX) > tmpend)
+    return -1;
+  tmp += USERNAME_MAX;
+
+  /* copy the actual public message */
   memcpy(&msglen, tmp, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
   /* check if current pointer plus the length of the message makes it exceed the limit */

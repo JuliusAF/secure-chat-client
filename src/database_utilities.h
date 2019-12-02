@@ -21,10 +21,11 @@ typedef struct messages_components {
   int type;
   unsigned int msglen;
   unsigned char *message;
-  unsigned int publen;
-  char *pubkey;
+  unsigned int certlen;
+  char *cert;
   unsigned int siglen;
   unsigned char *sig;
+  char *sender;
   /* only a private message has these variables */
   unsigned int reclen;
   char* recipient;

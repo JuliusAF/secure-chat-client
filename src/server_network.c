@@ -105,14 +105,20 @@ unsigned char *serialize_message(msg_components_t *m, unsigned int payload_sz) {
   memcpy(tmp, &m->siglen, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
   memcpy(tmp, m->sig, m->siglen);
+  printf("\n\nserver siglen: %d\n\n", m->siglen);
   tmp += m->siglen;
-  memcpy(tmp, &m->publen, sizeof(unsigned int));
+  memcpy(tmp, &m->certlen, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
-  memcpy(tmp, m->pubkey, m->publen);
-  tmp += m->publen;
+  memcpy(tmp, m->cert, m->certlen);
+  printf("\n\nserver certlen: %d\n\n", m->certlen);
+  tmp += m->certlen;
+  memset(tmp, '\0', USERNAME_MAX);
+  memcpy(tmp, m->sender, strlen(m->sender));
+  tmp += USERNAME_MAX;
   memcpy(tmp, &m->msglen, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
   memcpy(tmp, m->message, m->msglen);
+  printf("\n\nserver msglen: %d\n\n", m->msglen);
   tmp += m->msglen;
 
   /* if the message is private, more fields must be added. This is done here */
@@ -147,8 +153,8 @@ packet_t *gen_s_msg_packet(msg_components_t *m) {
   if (m == NULL || m->type == 0)
     return NULL;
 
-  payload_sz = sizeof(unsigned int) + m->siglen + sizeof(unsigned int) + m->publen +
-               sizeof(unsigned int) + m->msglen;
+  payload_sz = sizeof(unsigned int) + m->siglen + sizeof(unsigned int) + m->certlen +
+               USERNAME_MAX + sizeof(unsigned int) + m->msglen;
 
   if (m->type == PRIV_MSG_TYPE) {
     payload_sz += USERNAME_MAX + IV_SIZE + sizeof(unsigned int) + m->s_symkeylen +

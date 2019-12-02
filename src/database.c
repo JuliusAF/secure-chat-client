@@ -402,6 +402,10 @@ int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err
   return ret;
 }
 
+/* stores a private message and its components into the database.
+Returns:
+1 on success
+0 on database failure*/
 int handle_db_privmsg(client_parsed_t *parsed, client_t *client_info, char *error_msg) {
   char *sql;
   int ret = -1, rc, step;
@@ -488,7 +492,7 @@ int handle_db_pubmsg(client_parsed_t *parsed, client_t *client_info) {
     goto cleanup;
 
   sql = "INSERT INTO MESSAGES VALUES(?1, NULL, ?2, ?3, NULL, NULL, NULL)";
-
+printf("database function msglen: %d", parsed->pubmsg_packet.msg_sz);
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK) {
     sqlite3_bind_text(res, 1, client_info->username, -1, SQLITE_STATIC);
@@ -639,14 +643,14 @@ msg_queue_t *fetch_db_messages(client_t *client_info) {
   sqlite3 *db = NULL;
 
   if (client_info == NULL || client_info->is_logged == false ||
-      strlen(client_info->username) == 0)
+      strnlen(client_info->username, USERNAME_MAX) == 0)
     return NULL;
 
   db = open_database();
   if (db == NULL)
     return NULL;
 
-  sql = "SELECT MESSAGES.ROWID, MESSAGE, CERTIFICATE, SIGNATURE, RECIPIENT, MESSAGES.IV, S_SYMKEY, R_SYMKEY FROM (USERS, MESSAGES)"
+  sql = "SELECT MESSAGES.ROWID, MESSAGE, CERTIFICATE, SIGNATURE, SENDER, RECIPIENT, MESSAGES.IV, S_SYMKEY, R_SYMKEY FROM (USERS, MESSAGES)"
         "WHERE ((SENDER = ?1 OR RECIPIENT = ?1 OR RECIPIENT IS NULL) AND"
         "(USERS.USERNAME = MESSAGES.SENDER) AND"
         "(MESSAGES.ROWID > ?2))";
@@ -668,10 +672,11 @@ msg_queue_t *fetch_db_messages(client_t *client_info) {
   step = sqlite3_step(res);
   if (step != SQLITE_ROW)
     goto cleanup;
-
+  printf("reaches here\n");
   while (step == SQLITE_ROW) {
     cmps = assign_msg_components(res);
     if (cmps != NULL) {
+      printf("reaches now?\n");
       rowid = (signed long long) sqlite3_column_int64(res, 0);
       ret = add_msg_component(queue, cmps);
       if (ret < 0) {
@@ -749,6 +754,7 @@ char *fetch_db_users() {
   return fetched;
 }
 
+/* fetches the certificate of a user from the database */
 char *fetch_db_pubkey(char *name, unsigned int *fetchlen, char *err) {
   const char *tmp;
   int rc, step;

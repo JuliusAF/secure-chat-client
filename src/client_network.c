@@ -347,13 +347,18 @@ unsigned char *serialize_pubmsg(char *message, user_t *u, unsigned int payload_s
   tmp = payload;
   s = strlen(message);
 
-  memcpy(tmp, &u->rsa_keys->publen, sizeof(unsigned int));
+  memcpy(tmp, &u->rsa_keys->certlen, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
-  memcpy(tmp, u->rsa_keys->pubkey, u->rsa_keys->publen);
-  tmp += u->rsa_keys->publen;
+  memcpy(tmp, u->rsa_keys->cert, u->rsa_keys->certlen);
+  printf("\n\nclient send certlen: %d\n\n", u->rsa_keys->certlen);
+  tmp += u->rsa_keys->certlen;
+  memset(tmp, '\0', USERNAME_MAX);
+  memcpy(tmp, u->username, strlen(u->username));
+  tmp += USERNAME_MAX;
   memcpy(tmp, &s, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
   memcpy(tmp, message, s);
+  printf("\n\nclient send msglen: %d\n\n", s);
 
   return payload;
 }
@@ -374,7 +379,7 @@ packet_t *gen_c_pubmsg_packet(command_t *n, user_t *u) {
   if (ret < 1)
     return NULL;
 
-  payload_sz = sizeof(int) + u->rsa_keys->publen + sizeof(int) + strlen(message);
+  payload_sz = sizeof(int) + u->rsa_keys->certlen + USERNAME_MAX + sizeof(int) + strlen(message);
   payload = serialize_pubmsg(message, u, payload_sz);
   if (payload == NULL)
     return NULL;

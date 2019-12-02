@@ -109,6 +109,7 @@ void sign_client_packet(packet_t *p, user_t *u) {
 	else
 		p->header->siglen = ret;
 
+	print_hex(p->header->sig, p->header->siglen);
 	cleanup:
 
 	free(hash);
@@ -116,20 +117,38 @@ void sign_client_packet(packet_t *p, user_t *u) {
 
 /* this function verifies another clients signature. This signature may be its own.
 The signature is transmitted as part of a message (public or private) */
-bool verify_client_payload(char *pkey, unsigned int plen, unsigned char *s, unsigned int slen, unsigned char *hash) {
-	bool ret;
+bool verify_client_payload(char *cert, unsigned int certlen, char* sender,
+													unsigned char *s, unsigned int slen, unsigned char *hash) {
+	bool ret = false;
+	char *pubkey;
+	unsigned int publen;
 	BIO *bio;
 	EVP_PKEY *key;
 
-	bio = BIO_new_mem_buf(pkey, plen);
+	if (cert == NULL || sender == NULL || s == NULL || hash == NULL)
+		return false;
+printf("cert: %s\n", cert);
+printf("sender: %sEND\n", sender);
+	ret = verify_x509_certificate(cert, certlen, sender);
+	if (!ret)
+		return false;
+printf("reaches ver2\n");
+	pubkey = obtain_pubkey_from_x509(cert, certlen, &publen);
+	if (pubkey == NULL)
+		return false;
+print_hex(s, slen);
+printf("hash\n");
+print_hex(hash, SHA256_DIGEST_LENGTH);
+	bio = BIO_new_mem_buf(pubkey, publen);
 	if (bio == NULL)
 		return false;
 
   key = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
 
   ret = rsa_verify_sha256(key, s, hash, slen, SHA256_DIGEST_LENGTH);
-
-  BIO_free(bio);
+printf("reaches ver4\n");
+	free(pubkey);
+	BIO_free(bio);
   return ret;
 }
 
@@ -399,8 +418,8 @@ void handle_server_pubmsg(server_parsed_t *p, user_t *u) {
 	if (u == NULL)
 		return;
 	/* verify the signature of the original payload */
-	if (!verify_client_payload(p->messages.pubkey, p->messages.publen, p->messages.sig,
-			p->messages.siglen, p->messages.hashed_payload)) {
+	if (!verify_client_payload(p->messages.cert, p->messages.certlen, p->messages.sender,
+			p->messages.sig, p->messages.siglen, p->messages.hashed_payload)) {
 		fprintf(stderr, "author of message doesn't match\n");
 		return;
 	}
@@ -417,8 +436,8 @@ void handle_server_pubkey_response(server_parsed_t *p, user_t *u) {
 	packet_t *packet = NULL;
 
 	/* verify the information received from the server that was sent from the client was not changed */
-	if (!verify_client_payload(u->rsa_keys->pubkey, u->rsa_keys->publen, p->pubkey_response.sig,
-			p->pubkey_response.siglen, p->pubkey_response.hashed_payload)) {
+	if (!verify_client_payload(u->rsa_keys->cert, u->rsa_keys->certlen, u->username,
+			p->pubkey_response.sig,	p->pubkey_response.siglen, p->pubkey_response.hashed_payload)) {
 		fprintf(stderr, "authors of packet don't match\n");
 	}
 
@@ -444,8 +463,8 @@ void handle_server_privmsg(server_parsed_t *p, user_t *u) {
 	int decrypted_msglen, decrypted_keylen;
 	unsigned int encrypted_keylen;
 	/* verify the signature of the original payload */
-	if (!verify_client_payload(p->messages.pubkey, p->messages.publen, p->messages.sig,
-			p->messages.siglen, p->messages.hashed_payload)) {
+	if (!verify_client_payload(p->messages.cert, p->messages.certlen, p->messages.sender,
+			p->messages.sig, p->messages.siglen, p->messages.hashed_payload)) {
 		fprintf(stderr, "author of message doesn't match\n");
 		return;
 	}

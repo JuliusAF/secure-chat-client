@@ -39,50 +39,59 @@ msg_components_t *assign_msg_components(sqlite3_stmt *res) {
   messages or only some of them for public messages. This checks if the first
   column that can be NULL, recipients, is NULL. If it is, the message type is
   a public message */
-  if (sqlite3_column_type(res, 4) == SQLITE_NULL){
+  if (sqlite3_column_type(res, 5) == SQLITE_NULL){
     m->type = PUB_MSG_TYPE;
   }
   else
     m->type = PRIV_MSG_TYPE;
 
-
+  printf("reaches msg1\n");
   /* find lengths of the character arrays for all messages */
   m->msglen = sqlite3_column_bytes(res, 1);
-  m->publen = sqlite3_column_bytes(res, 2);
+  m->certlen = sqlite3_column_bytes(res, 2);
   m->siglen = sqlite3_column_bytes(res, 3);
-
+  /* check that size of username doesnt exceed max */
+  if (sqlite3_column_bytes(res, 4) > USERNAME_MAX)
+    return NULL;
+printf("reaches msg2\n");
   m->message = safe_malloc(m->msglen+1 * sizeof *m->message);
-  m->pubkey = safe_malloc(m->publen+1 * sizeof *m->pubkey);
+  m->cert = safe_malloc(m->certlen+1 * sizeof *m->cert);
   m->sig = safe_malloc(m->siglen+1 * sizeof *m->sig);
-  if (m->message == NULL || m->pubkey == NULL || m->sig == NULL) {
+  m->sender = safe_malloc(USERNAME_MAX+1 * sizeof *m->sender);
+  if (m->message == NULL || m->cert == NULL || m->sig == NULL || m->sender == NULL) {
     free_msg_components(m);
     return NULL;
   }
-
+printf("reaches msg3\n");
   /* copy the components that are always in a msg_components_t struct into their
   respective fields */
   tmp = sqlite3_column_blob(res, 1);
   memcpy(m->message, tmp, m->msglen);
   m->message[m->msglen] = '\0';
-
+printf("reaches msg4\n");
+printf("inside fetch msglen: %d\n", m->msglen);
   tmp = sqlite3_column_blob(res, 2);
-  memcpy(m->pubkey, tmp, m->publen);
-  m->pubkey[m->publen] = '\0';
-
+  memcpy(m->cert, tmp, m->certlen);
+  m->cert[m->certlen] = '\0';
+printf("reaches msg5\n");
   tmp = sqlite3_column_blob(res, 3);
   memcpy(m->sig, tmp, m->siglen);
   m->sig[m->siglen] = '\0';
-
+printf("reaches msg6\n");
+  tmp = sqlite3_column_text(res, 4);
+  memset(m->sender, '\0', USERNAME_MAX+1);
+  memcpy(m->sender, tmp, sqlite3_column_bytes(res, 4));
+printf("reaches msg7\n");
   /* if the message is private, add the components needs for a private message */
   if (m->type == PRIV_MSG_TYPE) {
     /* find the lengths of the extra componenets needed for private messages */
-    m->reclen = sqlite3_column_bytes(res, 4);
+    m->reclen = sqlite3_column_bytes(res, 5);
     if (m->reclen > USERNAME_MAX) {
       free_msg_components(m);
       return NULL;
     }
-    m->s_symkeylen = sqlite3_column_bytes(res, 6);
-    m->r_symkeylen = sqlite3_column_bytes(res, 7);
+    m->s_symkeylen = sqlite3_column_bytes(res, 7);
+    m->r_symkeylen = sqlite3_column_bytes(res, 8);
 
     m->recipient = safe_malloc(m->reclen+1 * sizeof *m->recipient);
     /* IV size is constant, defined in IV_SIZE */
@@ -95,23 +104,23 @@ msg_components_t *assign_msg_components(sqlite3_stmt *res) {
     }
 
     /* copy the private message components into their respective fields */
-    tmp = sqlite3_column_text(res, 4);
+    tmp = sqlite3_column_text(res, 5);
     memcpy(m->recipient, tmp, m->reclen);
     m->recipient[m->reclen] = '\0';
 
-    if (sqlite3_column_bytes(res, 5) != IV_SIZE) {
+    if (sqlite3_column_bytes(res, 6) != IV_SIZE) {
       free_msg_components(m);
       return NULL;
     }
-    tmp = sqlite3_column_blob(res, 5);
+    tmp = sqlite3_column_blob(res, 6);
     memcpy(m->iv, tmp, IV_SIZE);
     m->iv[IV_SIZE] = '\0';
 
-    tmp = sqlite3_column_blob(res, 6);
+    tmp = sqlite3_column_blob(res, 7);
     memcpy(m->s_symkey, tmp, m->s_symkeylen);
     m->s_symkey[m->s_symkeylen] = '\0';
 
-    tmp = sqlite3_column_blob(res, 7);
+    tmp = sqlite3_column_blob(res, 8);
     memcpy(m->r_symkey, tmp, m->r_symkeylen);
     m->r_symkey[m->r_symkeylen] = '\0';
   }
@@ -127,10 +136,11 @@ void initialize_msg_components(msg_components_t *m) {
   m->type = 0;
   m->msglen = 0;
   m->message = NULL;
-  m->publen = 0;
-  m->pubkey = NULL;
+  m->certlen = 0;
+  m->cert = NULL;
   m->siglen = 0;
   m->sig = NULL;
+  m->sender = NULL;
   m->reclen = 0;
   m->recipient = NULL;
   m->iv = NULL;
@@ -149,8 +159,9 @@ void free_msg_components(msg_components_t *m) {
     return;
 
   free(m->message);
-  free(m->pubkey);
+  free(m->cert);
   free(m->sig);
+  free(m->sender);
   free(m->recipient);
   free(m->iv);
   free(m->s_symkey);

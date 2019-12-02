@@ -6,7 +6,7 @@ I realise the code is quite large, but I hope it is not too difficult to underst
  - A function called 'serialize_x' will turn the specified object/command (x) into a byte array.
  - A function starting with 'gen_' generates something, hopefully logically deducible from what follows in the function name.
  - A function called 'handle_' acts on some parsed information. For example, the handle_client_input() function and the other 'handle_client_' functions it called in server_utilities.h act on some parsed input from the client.
- - The source of a definition or function for the server and client is denoted by either an S or C respectively. For example, the definitions for client packet identification as seen in network.h start with 'C_'. This denotes that the identification is for a packet sent from the client. Likewise, the 'gen_c_' functions in client_network.c generate packets for the client to send to the server. 
+ - The source of a definition or function for the server and client is denoted by either an S or C respectively. For example, the definitions for client packet identification as seen in network.h start with 'C_'. This denotes that the identification is for a packet sent from the client. Likewise, the 'gen_c_' functions in client_network.c generate packets for the client to send to the server.
 
 # DATABASE
 
@@ -152,6 +152,7 @@ The identification is C_MSG_PRIVMSG.
 
 - 4 bytes for size of public key
 - variable size for public key
+- 20 bytes for sender of message
 - 4 bytes for the encrypted message size
 - variables size of the message
 - 20 bytes for the username of the recipient
@@ -169,6 +170,7 @@ The identification code is C_MSG_PUBMSG
 
 - 4 bytes for size of public key
 - variable size for the key
+- 20 bytes for sender of message 
 - 4 bytes for the size of the message
 - variable size for the message
 

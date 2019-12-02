@@ -161,6 +161,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   tmp = packet->payload;
   tmpend = tmp+size;
 
+
   /* the returned sizes must be checked to discover memory overflows.
   Inputs the signature and its length into the struct */
   if ((tmp + sizeof(unsigned int)) > tmpend)
@@ -177,6 +178,9 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   parsed->messages.sig[parsed->messages.siglen] = '\0';
   tmp += parsed->messages.siglen;
 
+printf("\n\nclient siglen: %d\n\n", parsed->messages.siglen);
+  printf("message size: %ld\n\n\n", (packet->header->pckt_sz - sizeof(int) - parsed->messages.siglen));
+
   /* the original payload that was sent to the server when a public/private message
   was made was signed by that client. That payload must be found now and hashed, in order
   to verify the signature. The pointer tmp at its current position points to that original payload */
@@ -185,20 +189,27 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   if (parsed->messages.hashed_payload == NULL)
     return -1;
 
-  /* parse the public key length and public key into the struct and check for memory errors */
+  /* parse the certificate length and certificate into the struct and checks for memory errors */
   if ((tmp + sizeof(unsigned int)) > tmpend)
     return -1;
-  memcpy(&parsed->messages.publen, tmp, sizeof(unsigned int));
+  memcpy(&parsed->messages.certlen, tmp, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
-  if ((tmp + parsed->messages.publen) > tmpend)
+  if ((tmp + parsed->messages.certlen) > tmpend)
     return -1;
 
-  parsed->messages.pubkey = safe_malloc(parsed->messages.publen+1 * sizeof *parsed->messages.pubkey);
-  if (parsed->messages.pubkey == NULL)
+  parsed->messages.cert = safe_malloc(parsed->messages.certlen+1 * sizeof *parsed->messages.cert);
+  if (parsed->messages.cert == NULL)
     return -1;
-  memcpy(parsed->messages.pubkey, tmp, parsed->messages.publen);
-  parsed->messages.pubkey[parsed->messages.publen] = '\0';
-  tmp += parsed->messages.publen;
+  memcpy(parsed->messages.cert, tmp, parsed->messages.certlen);
+  parsed->messages.cert[parsed->messages.certlen] = '\0';
+  tmp += parsed->messages.certlen;
+printf("\n\nclient certlen: %d\n\n", parsed->messages.certlen);
+  if ((tmp + USERNAME_MAX) > tmpend)
+    return -1;
+  parsed->messages.sender = safe_malloc(USERNAME_MAX+1 * sizeof *parsed->messages.sender);
+  memset(parsed->messages.sender, '\0', USERNAME_MAX+1);
+  memcpy(parsed->messages.sender, tmp, USERNAME_MAX);
+  tmp += USERNAME_MAX;
 
   /* parse the message into the struct and check for memory errors */
   if ((tmp + sizeof(unsigned int)) > tmpend)
@@ -214,7 +225,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   memcpy(parsed->messages.message, tmp, parsed->messages.msglen);
   parsed->messages.message[parsed->messages.msglen] = '\0';
   tmp += parsed->messages.msglen;
-
+printf("\n\nclient msglen: %d\n\n", parsed->messages.msglen);
   /* Now only private messages have more input. This is checked here */
   if (parsed->id == S_MSG_PRIVMSG) {
     /* input the recipient into the appropriate variable. This field has a constant
@@ -407,7 +418,8 @@ void initialize_server_parsed(server_parsed_t *p) {
     case S_MSG_PRIVMSG:
       p->messages.sig = NULL;
       p->messages.hashed_payload = NULL;
-      p->messages.pubkey = NULL;
+      p->messages.cert = NULL;
+      p->messages.sender = NULL;
       p->messages.message = NULL;
       p->messages.recipient = NULL;
       p->messages.iv = NULL;
@@ -456,18 +468,20 @@ bool is_server_parsed_legal(server_parsed_t *p) {
     case S_MSG_PUBMSG:
       if (p->messages.sig == NULL ||
           p->messages.hashed_payload == NULL ||
-          p->messages.pubkey == NULL ||
+          p->messages.cert == NULL ||
+          p->messages.sender == NULL ||
           p->messages.message == NULL)
         return false;
       break;
     case S_MSG_PRIVMSG:
       if (p->messages.sig == NULL ||
           p->messages.hashed_payload == NULL ||
-          p->messages.pubkey == NULL ||
-          p->messages.message == NULL||
-          p->messages.recipient == NULL||
-          p->messages.iv == NULL||
-          p->messages.s_symkey == NULL||
+          p->messages.cert == NULL ||
+          p->messages.sender == NULL ||
+          p->messages.message == NULL ||
+          p->messages.recipient == NULL ||
+          p->messages.iv == NULL ||
+          p->messages.s_symkey == NULL ||
           p->messages.r_symkey == NULL)
         return false;
       break;
@@ -523,7 +537,8 @@ void free_server_parsed(server_parsed_t *p) {
     case S_MSG_PRIVMSG:
       free(p->messages.sig);
       free(p->messages.hashed_payload);
-      free(p->messages.pubkey);
+      free(p->messages.cert);
+      free(p->messages.sender);
       free(p->messages.message);
       free(p->messages.recipient);
       free(p->messages.iv);

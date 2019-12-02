@@ -35,7 +35,8 @@ int read_stdin(char *buffer, int size);
 /* these functions deal with input from the user through stdin and
 sending any necessary data to the server */
 void sign_client_packet(packet_t *p, user_t *u);
-bool verify_client_payload(char *pkey, unsigned int plen, unsigned char *s, unsigned int slen, unsigned char *hash);
+bool verify_client_payload(char *cert, unsigned int certlen, char *sender,
+                          unsigned char *s, unsigned int slen, unsigned char *hash);
 void handle_user_input(command_t *n, user_t *u, request_t *r);
 void handle_user_register(command_t *node, user_t *user, request_t *request);
 void handle_user_login(command_t *node, user_t *user, request_t *request);
