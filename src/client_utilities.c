@@ -74,7 +74,7 @@ signing the hash of the payload of the packet and storing that signature, as wel
 signature length, in the packet header
 Only commands that require the user be logged in are signed. This means the /users
 command, as well as a public or pivate message will be signed. A login or register
-request will no be signed */
+request will not be signed */
 void sign_client_packet(packet_t *p, user_t *u) {
 	int ret, privlen;
 	char *privkey;
@@ -137,7 +137,7 @@ bool verify_client_payload(char *pkey, unsigned int plen, unsigned char *s, unsi
 From this function, the packets for each command are created and sent
 to the server*/
 void handle_user_input(command_t *n, user_t *u, request_t *r) {
-	if (n == NULL)
+	if (n == NULL || u == NULL || r == NULL)
     return;
 
   switch (n->command) {
@@ -157,6 +157,8 @@ void handle_user_input(command_t *n, user_t *u, request_t *r) {
 			handle_user_users(n, u);
       break;
     case COMMAND_EXIT:
+			/* the exit commands requires the breaking of the main loop int client.c As such it is
+			handled there */
       break;
 		case COMMAND_ERROR:
 			print_error(n->error_message);
@@ -173,8 +175,6 @@ void handle_user_register(command_t *node, user_t *user, request_t *request) {
 	unsigned char *masterkey;
 	packet_t *packet;
 
-	if (node == NULL || node->command != COMMAND_REGISTER)
-		return;
 	if (user->is_logged) {
 		print_error("you cannot register a new account while logged in");
 		return;
@@ -214,9 +214,6 @@ void handle_user_login(command_t *node, user_t *user, request_t *request) {
 	int ret;
 	unsigned char *masterkey = NULL;
 	packet_t *packet = NULL;
-
-	if (node == NULL || user == NULL || request == NULL)
-		return;
 
 	if (request->is_request_active) {
 		print_error("there is already an active register request");
@@ -258,10 +255,6 @@ void handle_user_users(command_t *node, user_t *user) {
 	int ret;
 	packet_t *packet = NULL;
 
-	if (node == NULL || user == NULL ||
-			node->command != COMMAND_USERS)
-		return;
-
 	if (!user->is_logged) {
 		print_error("user is not currently logged in");
 		return;
@@ -284,9 +277,6 @@ void handle_user_pubmsg(command_t *node, user_t *user) {
 	int ret;
 	packet_t *packet = NULL;
 
-	if (node == NULL || user == NULL)
-		return;
-
 	if (!user->is_logged) {
 		print_error("you must be logged in to send a public message");
 		return;
@@ -305,13 +295,10 @@ void handle_user_pubmsg(command_t *node, user_t *user) {
 }
 
 /* creates a public key request packet to send to the user. If a public key is returned
-the actual encryption of the private message is handled in the handle_server_ functions*/
+the actual encryption of the private message is handled in the handle_server_pubkey_rqst function */
 void handle_user_privmsg(command_t *node, user_t *user) {
 	int ret;
 	packet_t *packet = NULL;
-
-	if (node == NULL || user == NULL)
-		return;
 
 	if (!user->is_logged) {
 		print_error("you must be logged in to send a private message");
@@ -344,8 +331,6 @@ void print_error(char *s) {
 	write(1, s, strlen(s));
 	write(1, "\n", 1);
 }
-
-
 
 /* these functions deal with input from the server. This includes storing
 data obtained from the server if necessary and printing messages */
@@ -390,7 +375,7 @@ void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
 
 }
 
-/* this functions deals the list of users sent from the server in response to
+/* this functions deals with the list of users sent from the server in response to
 a successful /users command */
 void handle_server_users(server_parsed_t *p, user_t *u) {
 	char *token, *tmp;
@@ -424,7 +409,7 @@ void handle_server_pubmsg(server_parsed_t *p, user_t *u) {
 	write(STDOUT_FILENO, "\n", 1);
 }
 
-/* handles a server response to a prvious public key request. This function decrypts the message
+/* handles a server response to a previous public key request. This function decrypts the message
 associated with the request, reencrypts it for both itself and the recipient, and sends the message
 back to the server */
 void handle_server_pubkey_response(server_parsed_t *p, user_t *u) {
@@ -437,6 +422,7 @@ void handle_server_pubkey_response(server_parsed_t *p, user_t *u) {
 		fprintf(stderr, "authors of packet don't match\n");
 	}
 
+	/* the encryption of the message is done in this function and the ones it calls */
 	packet = gen_c_privmsg_packet(p, u);
 	if (packet == NULL)
 		return;
@@ -464,7 +450,7 @@ void handle_server_privmsg(server_parsed_t *p, user_t *u) {
 		return;
 	}
 
-	/* check if logged in user is the recipient of the message. If he is, use the recipients
+	/* check if logged in user is the recipient of the message. If they are, use the recipients
 	symmetric key, otherwise use the senders */
 	if(strncmp(u->username, p->messages.recipient, USERNAME_MAX) == 0) {
 		encrypted_keylen = p->messages.r_symkeylen;
@@ -495,7 +481,7 @@ void handle_server_privmsg(server_parsed_t *p, user_t *u) {
 }
 
 /* this function handles packets sent from the server on register or login
-success. In both these instances the same data is returned, so this function can.
+success. In both these instances the same data is returned, so this function is used for both.
 This function checks for any errors, and if there are none sets the client to logged
 in and sets all the necessary variables */
 void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
@@ -560,7 +546,8 @@ void handle_server_log_fail(server_parsed_t *p, user_t *u, request_t *r) {
 	}
 
 	r->is_request_active = false;
-	strcpy(r->username, "");
+	memset(r->username, '\0', USERNAME_MAX+1);
+	//strcpy(r->username, "");
 	memset(r->masterkey, '\0', MASTER_KEY_LEN+1);
 
 	print_error(p->error_message);

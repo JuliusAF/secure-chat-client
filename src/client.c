@@ -52,6 +52,7 @@ int main(int argc, const char* argv[]) {
 	port = (unsigned short) atoi(argv[2]);
 	socketfd = client_connect(argv[1], port);
 
+	/* set up ssl connection and check server certificate and common name */
 	const char cacertpath[] = "clientkeys/ca-cert.pem";
 	SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
 	SSL_CTX_load_verify_locations(ctx, cacertpath, NULL);
@@ -76,7 +77,7 @@ int main(int argc, const char* argv[]) {
 			printf("Server has reached the maximum number of clients\n");
     exit(EXIT_FAILURE);
   }
-
+	/* initializes the structs used to store user information client side */
 	user = initialize_user_info(ssl, socketfd);
 	request = initialize_request();
 
@@ -89,6 +90,7 @@ int main(int argc, const char* argv[]) {
 		selectfds = activefds;
 		select(maxfd+1, &selectfds, NULL, NULL, NULL);
 
+		/* handles user input from STDIN */
 		if (FD_ISSET(STDIN_FILENO, &selectfds)) {
 			input = safe_malloc(sizeof(char) * CHUNK);
 			bytes_read = read_stdin(input, CHUNK);
@@ -111,6 +113,7 @@ int main(int argc, const char* argv[]) {
 			free(input);
 		}
 
+		/* handles server input from the socket */
 		if (FD_ISSET(socketfd, &selectfds) && ssl_has_data(ssl)) {
 			parsed = NULL;
 			packet = NULL;
@@ -145,7 +148,7 @@ int main(int argc, const char* argv[]) {
 			free(server_output);
 		}
 	}
-
+	/* cleanup routine if the program successfully exits the read loop */
 	SSL_free(ssl);
   SSL_CTX_free(ctx);
 	free_keypair(user->rsa_keys);

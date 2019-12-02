@@ -5,6 +5,7 @@
 #include "network.h"
 #include "parse_user_input.h"
 
+/* holds the parsed input from the client based on what type of message was transmitted */
 typedef struct parsed_client_input {
   uint16_t id;
 
@@ -62,6 +63,7 @@ typedef struct parsed_client_input {
 
 } client_parsed_t;
 
+/* forward declaration for packet */
 typedef struct packet_to_send packet_t;
 
 /* functions for parsing packets received server side from the client */

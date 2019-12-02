@@ -19,6 +19,9 @@ server_parsed_t *parse_server_input(packet_t *p) {
     fprintf(stderr, "packet size larger than max in parse_server_input\n");
     return NULL;
   }
+  if (p->header->siglen > MAX_SIG_SZ) {
+    fprintf(stderr, "signature length larger than max in parse_server_input\n");
+  }
 
   parsed = safe_malloc(sizeof *parsed);
   if (parsed == NULL)
@@ -97,7 +100,6 @@ which is parsed into the same struct data fields here.
 Returns:
 1 on success
 -1 on failure */
-
 int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed) {
   unsigned int size;
   unsigned char *tmp, *tmpend;
@@ -144,7 +146,10 @@ int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed) {
 }
 
 /* parses a message packet from the server. It handles both private and public
-messages as they differ statically and can be processed similarly */
+messages as they differ statically and can be processed similarly
+Returns:
+1 on success
+-1 on failure */
 int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   unsigned int size, hashlen;
   unsigned char *tmp, *tmpend;
@@ -210,7 +215,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   parsed->messages.message[parsed->messages.msglen] = '\0';
   tmp += parsed->messages.msglen;
 
-  /* Now only private messages has more input. This is checked here */
+  /* Now only private messages have more input. This is checked here */
   if (parsed->id == S_MSG_PRIVMSG) {
     /* input the recipient into the appropriate variable. This field has a constant
     size defined as USERNAME_MAX */
@@ -266,7 +271,10 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   return 1;
 }
 
-/* parses a server response to a public key request */
+/* parses a server response to a public key request.
+Returns:
+1 on succes
+-1 on failure  */
 int parse_server_pubkey_response(packet_t *packet, server_parsed_t *parsed) {
   unsigned int size, len_to_hash;
   unsigned char *tmp, *tmpend, *hash;

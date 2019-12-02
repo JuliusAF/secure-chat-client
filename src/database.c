@@ -34,9 +34,7 @@ sqlite3 *open_database() {
 }
 
 /* This creates the tables for the database if they do not yet exist.
-The online status of a person is set as an integer that is either 0 or 1.
-I'm not sure of a better way to do this as there are no boolean values
-as far as I know, and comparing strings seemed weirder than this*/
+The online status of a person is set as an integer that is either 0 or 1. */
 int initialize_database() {
   char *err_msg = NULL;
   int rc, step;
@@ -105,21 +103,6 @@ int initialize_database() {
   sqlite3_finalize(res);
   sqlite3_close(db);
   return 0;
-}
-
-/* checks whether a fetched_userinfo_t struct is valid i.e has all pointers
-not NULL*/
-bool is_fetched_userinfo_legal(fetched_userinfo_t *f) {
-  return (f != NULL && f->encrypted_keys != NULL);
-}
-
-/* frees a given fetched_userinfo_t struct*/
-void free_fetched_userinfo(fetched_userinfo_t *f) {
-  if (f == NULL)
-    return;
-
-  free(f->encrypted_keys);
-  free(f);
 }
 
 /* this function finds the maxmimum inate row id in the MESSAGES table
@@ -646,7 +629,6 @@ fetched_userinfo_t *fetch_db_user_info(client_t *client_info) {
 /* this function returns a msg_queue_t struct that holds all the messages relevant
 to the user. The structure preserves the chronology of messages, with the oldest message
 no yet updated to the user being in the first index. */
-
 msg_queue_t *fetch_db_messages(client_t *client_info) {
   msg_queue_t *queue = NULL;
   msg_components_t *cmps = NULL;

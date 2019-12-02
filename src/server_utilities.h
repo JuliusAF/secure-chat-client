@@ -28,6 +28,8 @@ typedef struct client_info {
   signed long long last_updated;
 } client_t;
 
+/* the worker function that contains the logic of reading client input, parsing it
+and acting on it */
 void worker(int connfd, int from_parent[2], int to_parent[2]);
 bool is_client_sig_good(packet_t *p, client_t *c);
 

@@ -67,7 +67,6 @@ packet_t *gen_s_userinfo_packet(fetched_userinfo_t *f, uint16_t id) {
 
 /* This function creates a packet that holds the list of users currently logged in,
 delimited with spaces */
-
 packet_t *gen_s_users_packet(char *users) {
   unsigned char *payload = NULL;
   packet_hdr_t *header = NULL;
@@ -116,6 +115,7 @@ unsigned char *serialize_message(msg_components_t *m, unsigned int payload_sz) {
   memcpy(tmp, m->message, m->msglen);
   tmp += m->msglen;
 
+  /* if the message is private, more fields must be added. This is done here */
   if (m->type == PRIV_MSG_TYPE) {
     /* constant 20 bytes is allocated for recipient name. Size defined in USERNAME_MAX */
     memset(tmp, '\0', USERNAME_MAX);
@@ -169,7 +169,7 @@ packet_t *gen_s_msg_packet(msg_components_t *m) {
   return pack_packet(header, payload);
 }
 
-/* serialized the response to a public key request from the client */
+/* serializes the response to a public key request from the client */
 unsigned char *serialize_pubkey_request(client_parsed_t *p, char *key, unsigned int len, unsigned int payload_sz) {
   unsigned char *payload, *tmp;
 

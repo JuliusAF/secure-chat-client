@@ -88,6 +88,7 @@ int main(int argc, const char* argv[]) {
 						continue;
 					}
 
+					/* creates a pipe to establish communication between server and worker */
 					if (pipe(to_child + free_pipe*2) < 0) {
 						perror("failed to create to_child pipe");
 						close(connfd);
@@ -101,6 +102,7 @@ int main(int argc, const char* argv[]) {
 						continue;
 					}
 
+					/* fork and start the worker process */
 					active_pipes[free_pipe] = true;
 					pid = fork();
 					if (pid == (pid_t) -1) {

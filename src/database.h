@@ -7,19 +7,10 @@
 #include "parse_client_input.h"
 #include "database_utilities.h"
 
-typedef struct fetched_user_info {
-  unsigned char iv[IV_SIZE+1];
-  unsigned int encrypt_sz;
-  unsigned char *encrypted_keys;
-} fetched_userinfo_t;
-
 /* functions for the initialization of structs defined in this header and for
 the database*/
 sqlite3 *open_database(void);
 int initialize_database(void);
-/* helper functions pertaining to the fetched_user_info struct */
-bool is_fetched_userinfo_legal(fetched_userinfo_t *f);
-void free_fetched_userinfo(fetched_userinfo_t *f);
 
 /* functions used to update the database based on what command was invoked
 from the client */

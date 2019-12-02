@@ -1,7 +1,9 @@
 #include "parse_user_input.h"
 
+/* defines the delimiters used for strtok */
 static const char delim[] = " \n\t\v";
 
+/* helper function to print hexadecimals. Not used in final version */
 void print_hex(unsigned char *hex, int len) {
   printf("hexadecimals: ");
   for (int i = 0; i < len; i++) {
@@ -10,6 +12,7 @@ void print_hex(unsigned char *hex, int len) {
   printf("END\n");
 }
 
+/* checks if a string is all digits */
 bool is_digit(const char *s) {
   for (size_t i = 0; i < strlen(s); i++)
     if(!isdigit(s[i]))
@@ -17,6 +20,7 @@ bool is_digit(const char *s) {
   return true;
 }
 
+/* trims the white space at the front of a string */
 char* trim_front_whitespace(char* input) {
   if (!input)
     return input;
@@ -29,6 +33,7 @@ char* trim_front_whitespace(char* input) {
   return input;
 }
 
+/* times the white space at the back of a string */
 int trim_back_whitespace(char* input) {
   int input_size;
 
@@ -43,6 +48,8 @@ int trim_back_whitespace(char* input) {
   return input_size;
 }
 
+/* checks if a message is legal as defined in the 'user interface' section
+in the assignment documentation */
 static bool is_message_legal(char *input) {
   if (input[0] == '/' || input[0] == '@' || input == NULL || input[0] == '\0')
     return false;
@@ -65,6 +72,7 @@ static bool is_token_legal(char *input) {
   return true;
 }
 
+/* create and error node */
 void make_error(command_t *node, char *s) {
   node->command = COMMAND_ERROR;
   node->error_message = safe_strdup(s);
@@ -74,6 +82,7 @@ void make_error(command_t *node, char *s) {
 parse_input() that error check user input and if there are no errors,
 it places the fields belonging to some input into a node of type command_t*/
 
+/* parse an exit command by the user */
 command_t *make_exit_node(char *input) {
   command_t *node = safe_malloc(sizeof *node);
 
@@ -84,6 +93,7 @@ command_t *make_exit_node(char *input) {
   return node;
 }
 
+/* parse a login command by the user */
 command_t* make_login_node(char *input) {
   command_t *node = safe_malloc(sizeof *node);
   char *temp = malloc(sizeof(char) * (strlen(input)+1)),
@@ -128,6 +138,8 @@ command_t* make_login_node(char *input) {
   return node;
 }
 
+/* parse a register command by the user. The format is the same as a login, so
+it calls the make login node. */
 command_t* make_register_node(char *input) {
   command_t *node;
   node = make_login_node(input);
@@ -139,6 +151,7 @@ command_t* make_register_node(char *input) {
   return node;
 }
 
+/* parse a private message by the user */
 command_t *make_privmsg_node(char *input) {
   int token_size;
   command_t *node = safe_malloc(sizeof *node);
@@ -182,6 +195,7 @@ command_t *make_privmsg_node(char *input) {
   return node;
 }
 
+/* parse a public message by the user */
 command_t* make_pubmsg_node(char *input) {
   command_t *node = safe_malloc(sizeof *node);
 
@@ -197,6 +211,7 @@ command_t* make_pubmsg_node(char *input) {
   return node;
 }
 
+/* parse a users command */
 command_t* make_users_node(char *input) {
   command_t *node = safe_malloc(sizeof *node);
 
@@ -209,6 +224,8 @@ command_t* make_users_node(char *input) {
   return node;
 }
 
+/* calls the appropriate helper function based on first token pull from a string
+after it has had its front space and back space cleared */
 command_t *parse_input(char *input) {
   char *formatted_input, *temp, *token;
   int input_size;

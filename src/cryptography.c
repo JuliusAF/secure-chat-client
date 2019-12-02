@@ -68,7 +68,6 @@ unsigned char *hash_password(char *input, unsigned int size, unsigned char *salt
 
 /* wrapper function to hash things other than passwords. These never add a salt
 so the field need not be entered */
-
 unsigned char *hash_input(char *input, unsigned int size) {
   return hash_password(input, size, NULL, 0);
 }

@@ -26,6 +26,7 @@
 when an ssl connection is established*/
 #define SERVER_COMMON_NAME "server.example.com"
 
+/* struct to hold a rsa key pair in memory */
 typedef struct rsa_keypairs {
   unsigned int privlen;
   unsigned int publen;
@@ -33,21 +34,22 @@ typedef struct rsa_keypairs {
   char *pubkey;
 } keypair_t;
 
+/* functions to create random bytes, hash input and create the master key */
 unsigned char *create_rand_salt(unsigned int size);
 unsigned char *hash_password(char *input, unsigned int size, unsigned char *salt, unsigned int salt_size);
 unsigned char *hash_input(char *input, unsigned int size);
 unsigned char *gen_master_key(char *username, char *password);
-
+/* functions for the keypair_t struct */
 keypair_t *create_rsa_pair(void);
 bool is_keypair_legal(keypair_t *k);
 void free_keypair(keypair_t *k);
-
+/* function to apply AES-128-CBC to an input with the provided salt and initialization vector */
 int apply_aes(unsigned char *output, unsigned char *input, int size,
               unsigned char *key, unsigned char *iv, int enc);
-
+/* functions for signature creation and verification */
 unsigned int rsa_sign_sha256(EVP_PKEY *key, unsigned char *output, unsigned char* input, unsigned int inlen);
 bool rsa_verify_sha256(EVP_PKEY *key, unsigned char *s, unsigned char *i, unsigned int slen, unsigned int ilen);
-
+/* functions for RSA encryption and decryption */
 int apply_rsa_encrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigned char *in, unsigned char *out);
 int apply_rsa_decrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigned char *in, unsigned char *out);
 

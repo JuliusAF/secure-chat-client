@@ -3,10 +3,25 @@
 #include "cryptography.h"
 #include "safe_wrappers.h"
 
+/* checks whether a fetched_userinfo_t struct is valid i.e has all pointers
+not NULL*/
+bool is_fetched_userinfo_legal(fetched_userinfo_t *f) {
+  return (f != NULL && f->encrypted_keys != NULL);
+}
+
+/* frees a given fetched_userinfo_t struct*/
+void free_fetched_userinfo(fetched_userinfo_t *f) {
+  if (f == NULL)
+    return;
+
+  free(f->encrypted_keys);
+  free(f);
+}
+
 /* creates and returns a msg_components_t struct that contains all relevant
 information stored in the sqlite3 res object. The variables accessed and stored
 are dependent on what type of message it is. Private messages require more
-information than */
+information than public messages */
 msg_components_t *assign_msg_components(sqlite3_stmt *res) {
   const unsigned char *tmp;
   msg_components_t *m;

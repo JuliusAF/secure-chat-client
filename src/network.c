@@ -11,6 +11,7 @@
 #include "safe_wrappers.h"
 #include "network.h"
 
+/* function the same as what was provided by the course */
 int create_server_socket(unsigned short port) {
   int fd, r;
   struct sockaddr_in addr;
@@ -39,6 +40,7 @@ int create_server_socket(unsigned short port) {
   return fd;
 }
 
+/* function the same as what was provided by the course */
 static int lookup_host_ipv4(const char *hostname, struct in_addr *addr) {
   struct hostent *host;
 
@@ -56,6 +58,7 @@ static int lookup_host_ipv4(const char *hostname, struct in_addr *addr) {
   return -1;
 }
 
+/* function the same as what was provided by the course */
 int client_connect(const char *hostname, unsigned short port) {
   struct sockaddr_in addr;
   int fd, r;
@@ -82,6 +85,7 @@ int client_connect(const char *hostname, unsigned short port) {
   return fd;
 }
 
+/* function the same as what was provided by the course */
 int accept_connection(int serverfd) {
   int connfd;
 
@@ -111,9 +115,7 @@ int send_packet_over_socket(SSL *ssl, int fd, packet_t *p) {
   serialized = serialize_packet(p);
   if (serialized == NULL)
     return -1;
-  //printf("printinf serialized\n");
-  //write(1, serialized, size);
-  //printf("\n");
+
   /* write to socket until the entire packet has been sent */
   while (size > 0) {
     bytes_written = ssl_block_write(ssl, fd, serialized+total, size);
@@ -180,7 +182,7 @@ int read_packet_from_socket(SSL *ssl, int fd, unsigned char *buffer) {
 }
 
 /* creates and initializes a packet header using the input provided.
-returns a pointer to the structure that is later free with free_packet() */
+returns a pointer to the structure that is later freed with free_packet() */
 packet_hdr_t *initialize_header(uint16_t id, uint32_t sz) {
   packet_hdr_t *header;
 
@@ -307,6 +309,7 @@ packet_t *deserialize_packet(unsigned char *buffer, int size) {
   return packet;
 }
 
+/* frees a packet */
 void free_packet(packet_t *p) {
   if (p == NULL)
     return;

@@ -17,7 +17,7 @@ an encrypted RSA key pair over the socket */
 
 /* turns a keypair struct into a byte stream. This will be later encrypted
 using AES
-The formated of the serialization is:
+The format of the serialization is:
 - the size of the private key
 - the private key
 - the size of the public key
@@ -210,7 +210,8 @@ packet_t *gen_c_register_packet(command_t *n, request_t *r) {
 
 /* The following two functions handle the assimilation of a login request packet */
 
-/* */
+/* This serializes all the components of a log request: username and password. Both have
+Maximum lengths and thus the size is fixed */
 unsigned char *serialize_login(command_t *n) {
   unsigned char *payload, *tmp, *hashed_pass;
 
@@ -467,6 +468,7 @@ unsigned char *serialize_privmsg(server_parsed_t *p, user_t *u, unsigned int *pa
 
   tmp = payload;
 
+  /* copy the fields into the payload */
   memcpy(tmp, &u->rsa_keys->publen, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
   memcpy(tmp, u->rsa_keys->pubkey, u->rsa_keys->publen);
@@ -495,7 +497,7 @@ unsigned char *serialize_privmsg(server_parsed_t *p, user_t *u, unsigned int *pa
   return payload;
 }
 
-/* creates the actual privat message that is to be stored server side and sent to
+/* creates the actual private message that is to be stored server side and sent to
 the appropriate people */
 packet_t *gen_c_privmsg_packet(server_parsed_t *p, user_t *u) {
   unsigned int payload_sz;

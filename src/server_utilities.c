@@ -114,6 +114,7 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
   packet_t *packet;
   client_parsed_t *parsed;
 
+  /* set up SSL connection as per the examples */
   const char pathcert[] = "serverkeys/server-ca-cert.pem";
   const char pathkey[] = "serverkeys/server-key.pem";
   SSL_CTX *ctx = SSL_CTX_new(TLS_server_method());
@@ -134,6 +135,7 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 	FD_SET(connfd, &activefds);
 	FD_SET(from_parent[0], &activefds);
 
+  /* wait for input from the client of the main server */
 	while (true) {
 		selectfds = activefds;
 		select(maxfd+1, &selectfds, NULL, NULL, NULL);
@@ -146,6 +148,7 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
       input = safe_malloc(MAX_PACKET_SIZE * sizeof *input);
       if (input == NULL)
         continue;
+
       bytes_read = read_packet_from_socket(ssl, connfd, input);
 			if (bytes_read < 0) {
 				perror("failed to read bytes");
@@ -163,6 +166,8 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
       if (packet == NULL)
         goto cleanup;
 
+      /* check that a login condition is satisfies and if it is check the signature of
+      a packet for all appropriate instances */
       if (!is_login_cond_satisfied(packet, client_info)) {
         fprintf(stderr, "login condition not satisfied\n");
         goto cleanup;
@@ -174,13 +179,14 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
         goto cleanup;
       }
 
+      /* parse a packet */
       parsed = parse_client_input(packet);
       if (parsed == NULL) {
         packet = gen_s_error_packet(S_MSG_GENERIC_ERR, "couldn't process request");
         send_packet_over_socket(ssl, connfd, packet);
         goto cleanup;
       }
-
+      /* handle the request made by the client */
       handle_client_input(parsed, client_info, to_parent[1]);
 
       cleanup:
@@ -287,6 +293,7 @@ void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd) 
   }
 }
 
+/* handle a login request from the client */
 void handle_client_login(client_parsed_t *p, client_t *client_info) {
   int ret;
   uint16_t succ_id = 0, fail_id;
@@ -378,7 +385,6 @@ and notifies the main server that the database MESSAGES table has been updated
 so that the other workers can be notified and all users get sent their latest
 respective messages. This function does not actually send a packet. That is
 done in another function */
-
 void handle_client_pubmsg(client_parsed_t *p, client_t *client_info, int pipefd) {
   int ret;
   packet_t *packet;
@@ -436,6 +442,8 @@ void handle_client_pubkey_rqst(client_parsed_t *p, client_t *client_info) {
   free(fetched);
 }
 
+/* handles a private message from the client. This includes storing it in the database, sending any
+errors that occured to the client and informing the server that the client is updated */
 void handle_client_privmsg(client_parsed_t *p, client_t *client_info, int pipefd) {
   char err[200] = "";
   int ret;
@@ -458,7 +466,6 @@ void handle_client_privmsg(client_parsed_t *p, client_t *client_info, int pipefd
 /* this function deals with a database message update. It searches for all
 messages written to the database since last update (using the fetch_db_messages() function)
 and sends them too the client. The messages are only those the client should be permitted to see */
-
 void handle_db_msg_update(client_t *client_info) {
   int ret;
   msg_queue_t *queue = NULL;
@@ -482,8 +489,6 @@ void handle_db_msg_update(client_t *client_info) {
   }
 
   client_info->last_updated = queue->max_rowid;
-
-  //cleanup:
 
   free_msg_queue(queue);
 }

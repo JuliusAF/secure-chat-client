@@ -69,7 +69,6 @@ typedef struct parsed_server_input {
 typedef struct packet_to_send packet_t;
 
 /* functions for parsing packets sent from server to client*/
-
 server_parsed_t *parse_server_input(packet_t *p);
 int parse_server_users(packet_t *packet, server_parsed_t *parsed);
 int parse_server_userinfo(packet_t *packet, server_parsed_t *parsed);

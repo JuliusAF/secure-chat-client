@@ -1,5 +1,7 @@
 #include "safe_wrappers.h"
 
+/* memory allocation functions that have an error check included */
+
 void *safe_malloc(size_t s) {
   void *ptr = malloc(s);
   if (ptr == NULL) {

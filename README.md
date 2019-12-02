@@ -1,3 +1,13 @@
+# FOREWORD
+
+I realise the code is quite large, but I hope it is not too difficult to understand. I will detail some aspects of the code that may cause confusion, as well as explaining some of the naming conventions I attempted to stick to:
+
+ - The 'parse_x_input' source files and functions define the act of parsing input from the source x. That is, the parse_server_input source file contains functions used to parse input from the server.
+ - A function called 'serialize_x' will turn the specified object/command (x) into a byte array.
+ - A function starting with 'gen_' generates something, hopefully logically deducible from what follows in the function name.
+ - A function called 'handle_' acts on some parsed information. For example, the handle_client_input() function and the other 'handle_client_' functions it called in server_utilities.h act on some parsed input from the client.
+ - The source of a definition or function for the server and client is denoted by either an S or C respectively. For example, the definitions for client packet identification as seen in network.h start with 'C_'. This denotes that the identification is for a packet sent from the client. Likewise, the 'gen_c_' functions in client_network.c generate packets for the client to send to the server. 
+
 # DATABASE
 
 The database contains two tables; USERS and MESSAGES respectively. It is created in database.c with the function initialize_database();
