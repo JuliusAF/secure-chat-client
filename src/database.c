@@ -520,7 +520,7 @@ Returns:
 1 on success
 0 on failure */
 int handle_db_exit(client_t *client_info) {
-  char *sql, name[USERNAME_MAX+1];
+  char *sql, name[USERNAME_MAX+1] = "";
   int rc, step;
   sqlite3_stmt *res = NULL;
   sqlite3 *db = NULL;
@@ -555,7 +555,7 @@ int handle_db_exit(client_t *client_info) {
     return 0;
   }
 
-  strcpy(client_info->username, "");
+  memset(client_info->username, '\0', USERNAME_MAX+1);
   sqlite3_finalize(res);
   sqlite3_close(db);
   return 1;

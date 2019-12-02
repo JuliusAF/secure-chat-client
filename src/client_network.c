@@ -331,6 +331,7 @@ packet_t *gen_c_pubmsg_packet(command_t *n, user_t *u) {
   if (n == NULL || u == NULL || !is_keypair_legal(u->rsa_keys))
     return NULL;
 
+  memset(message, '\0', 500);
   ret = create_formatted_msg(message, n, u);
   if (ret < 1)
     return NULL;

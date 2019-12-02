@@ -547,7 +547,6 @@ void handle_server_log_fail(server_parsed_t *p, user_t *u, request_t *r) {
 
 	r->is_request_active = false;
 	memset(r->username, '\0', USERNAME_MAX+1);
-	//strcpy(r->username, "");
 	memset(r->masterkey, '\0', MASTER_KEY_LEN+1);
 
 	print_error(p->error_message);
