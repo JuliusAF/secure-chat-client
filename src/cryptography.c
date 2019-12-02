@@ -113,7 +113,7 @@ unsigned char *gen_master_key(char *username, char *password) {
 /* creates a rsa private key stores it in the key pair struct. These keys
 are created and will be linked to the user who commenced the register request.
 It writes this private key to the file specified in keypath, used to create a
-CA signed certificate and a public key 
+CA signed certificate and a public key
 
 the function utilizes an error boolean and the goto jump to check whether an
 error has occured, and returns NULL if yes and the rsa key pair struct if not */
@@ -388,6 +388,42 @@ char *obtain_pubkey_from_x509(char *cert, unsigned int certlen, unsigned int *pu
   return pubkey;
 }
 
+/* verifies a certificate */
+bool verify_x509_certificate(char *cert, unsigned int certlen, char *username, unsigned int userlen) {
+  const char cacert[] = "clientkeys/ca-cert.pem";
+  long int ret;
+  bool verified = false;
+  X509 *certificate = NULL;
+  char *username_hash = NULL;
+  X509_STORE* m_store = NULL;
+  X509_LOOKUP* m_lookup = NULL;
+  X509_STORE_CTX *storeCtx = NULL;
+
+  m_store = X509_STORE_new();
+  m_lookup = X509_STORE_add_lookup(m_store, X509_LOOKUP_file());
+  X509_STORE_load_locations(m_store, cacert, NULL);
+  X509_STORE_set_default_paths(m_store);
+  X509_LOOKUP_load_file(m_lookup, cacert, X509_FILETYPE_PEM);
+
+
+
+  storeCtx = X509_STORE_CTX_new();
+  certificate = get_x509_from_array(cert, certlen);
+  X509_STORE_CTX_init(storeCtx, m_store, certificate, NULL);
+  X509_STORE_CTX_set_flags(storeCtx, X509_V_FLAG_CB_ISSUER_CHECK);
+  ret = X509_verify_cert(storeCtx);
+  if (ret == 1) {
+    verified = true;
+  }
+  else {
+    ret = X509_STORE_CTX_get_error(storeCtx);
+    printf("Verificatione error: %s\n", X509_verify_cert_error_string(ret));
+  }
+  X509_free(certificate);
+  X509_STORE_CTX_free(storeCtx);
+  X509_STORE_free(m_store);
+  return verified;
+}
 
 /* applies AES-128-cbc encryption to the given output buffer, based on the given
 initialization vector and key. The key and IV are 16 bytes. The function

@@ -241,6 +241,9 @@ bool is_client_sig_good(packet_t *p, client_t *c) {
       id == C_MSG_EXIT)
     return true;
 
+  ret = verify_x509_certificate(c->cert, c->certlen, c->username, strlen(c->username));
+  printf("bool: %d\n", ret);
+
   pubkey = obtain_pubkey_from_x509(c->cert, c->certlen, &publen);
   if (pubkey == NULL) {
     free(pubkey);
