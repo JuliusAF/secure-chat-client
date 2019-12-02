@@ -230,6 +230,9 @@ char *gen_hex_of_username_hash(char *username) {
   unsigned char *hash = NULL;
   char *hex_hash = NULL, tmp[USERNAME_MAX+1] = "";
 
+  if (username == NULL)
+    return NULL;
+
   memset(tmp, '\0', USERNAME_MAX+1);
   memcpy(tmp, username, USERNAME_MAX);
 
@@ -334,6 +337,9 @@ X509 *get_x509_from_array(char *cert, unsigned int certlen) {
   X509 *certificate = NULL;
   BIO *bio = NULL;
 
+  if (cert == NULL)
+    return NULL;
+
   bio = BIO_new_mem_buf(cert, certlen);
   if (bio == NULL)
     goto cleanup;
@@ -389,39 +395,82 @@ char *obtain_pubkey_from_x509(char *cert, unsigned int certlen, unsigned int *pu
 }
 
 /* verifies a certificate */
-bool verify_x509_certificate(char *cert, unsigned int certlen, char *username, unsigned int userlen) {
+bool verify_x509_certificate(char *cert, unsigned int certlen, char *username) {
   const char cacert[] = "clientkeys/ca-cert.pem";
-  long int ret;
+  long int ret, commonlen;
   bool verified = false;
-  X509 *certificate = NULL;
-  char *username_hash = NULL;
-  X509_STORE* m_store = NULL;
-  X509_LOOKUP* m_lookup = NULL;
-  X509_STORE_CTX *storeCtx = NULL;
+  X509 *x509_certificate = NULL;
+  char *username_hash = NULL, *common_name = NULL;
+  X509_STORE* x509_store = NULL;
+  X509_LOOKUP* x509_lookup = NULL;
+  X509_STORE_CTX *x509_store_ctx = NULL;
+  X509_NAME *x509_name;
 
-  m_store = X509_STORE_new();
-  m_lookup = X509_STORE_add_lookup(m_store, X509_LOOKUP_file());
-  X509_STORE_load_locations(m_store, cacert, NULL);
-  X509_STORE_set_default_paths(m_store);
-  X509_LOOKUP_load_file(m_lookup, cacert, X509_FILETYPE_PEM);
+  if (cert == NULL || username == NULL)
+    return false;
 
+  /* creates the necessary objects and gets the X509 version of the certificate */
+  x509_store = X509_STORE_new();
+  x509_lookup = X509_STORE_add_lookup(x509_store, X509_LOOKUP_file());
+  x509_store_ctx = X509_STORE_CTX_new();
+  x509_certificate = get_x509_from_array(cert, certlen);
+  /* check that all objects were properly allocated */
+  if (x509_store == NULL || x509_lookup == NULL ||
+      x509_store_ctx == NULL || x509_certificate == NULL)
+    goto cleanup;
 
+  /* load the CA certificate and check if the input certificate verifies */
+  ret = X509_STORE_load_locations(x509_store, cacert, NULL);
+  if (ret < 1)
+    goto cleanup;
 
-  storeCtx = X509_STORE_CTX_new();
-  certificate = get_x509_from_array(cert, certlen);
-  X509_STORE_CTX_init(storeCtx, m_store, certificate, NULL);
-  X509_STORE_CTX_set_flags(storeCtx, X509_V_FLAG_CB_ISSUER_CHECK);
-  ret = X509_verify_cert(storeCtx);
-  if (ret == 1) {
-    verified = true;
-  }
-  else {
-    ret = X509_STORE_CTX_get_error(storeCtx);
-    printf("Verificatione error: %s\n", X509_verify_cert_error_string(ret));
-  }
-  X509_free(certificate);
-  X509_STORE_CTX_free(storeCtx);
-  X509_STORE_free(m_store);
+  ret = X509_STORE_set_default_paths(x509_store);
+  if (ret < 1)
+    goto cleanup;
+
+  ret = X509_LOOKUP_load_file(x509_lookup, cacert, X509_FILETYPE_PEM);
+  if (ret < 1)
+    goto cleanup;
+
+  ret = X509_STORE_CTX_init(x509_store_ctx, x509_store, x509_certificate, NULL);
+  if (ret < 1)
+    goto cleanup;
+  /* actually verifies the certificate */
+  ret = X509_verify_cert(x509_store_ctx);
+  if (ret != 1)
+    goto cleanup;
+    
+  /* retrieve the common name from the user certificate and check it with the expected name */
+  x509_name = X509_get_subject_name(x509_certificate);
+  if (x509_name == NULL)
+    goto cleanup;
+
+  commonlen = X509_NAME_get_text_by_NID(x509_name, NID_commonName, NULL, 0);
+  if (commonlen < 0)
+    goto cleanup;
+
+  common_name = safe_malloc(commonlen+1 * sizeof *common_name);
+  if (common_name == NULL)
+    goto cleanup;
+  /* copy common name into the common_name character array */
+  X509_NAME_get_text_by_NID(x509_name, NID_commonName, common_name, commonlen+1);
+
+  /* create the hash of the username */
+  username_hash = gen_hex_of_username_hash(username);
+  if (username_hash == NULL)
+    goto cleanup;
+
+  /* compare hash of username with the common name from the certificate */
+  if (strncmp(username_hash, common_name, strlen(username_hash)) != 0)
+    goto cleanup;
+  verified = true;
+  cleanup:
+
+  X509_STORE_CTX_free(x509_store_ctx);
+  X509_STORE_free(x509_store);
+  X509_free(x509_certificate);
+  free(common_name);
+  free(username_hash);
   return verified;
 }
 
