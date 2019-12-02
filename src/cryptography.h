@@ -43,6 +43,13 @@ unsigned char *gen_master_key(char *username, char *password);
 keypair_t *create_rsa_pair(void);
 bool is_keypair_legal(keypair_t *k);
 void free_keypair(keypair_t *k);
+/* functions for creating/using an X509 certificate */
+char *gen_hex_of_username_hash(char *username);
+int execute_ttp_script(char *username);
+char *gen_x509_certificate(char *username, unsigned int *outlen);
+X509 *get_x509_from_array(char *cert, unsigned int certlen);
+char *obtain_pubkey_from_x509(char *cert, unsigned int certlen, unsigned int *publen);
+
 /* function to apply AES-128-CBC to an input with the provided salt and initialization vector */
 int apply_aes(unsigned char *output, unsigned char *input, int size,
               unsigned char *key, unsigned char *iv, int enc);

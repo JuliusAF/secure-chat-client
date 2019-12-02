@@ -233,6 +233,167 @@ void free_keypair(keypair_t *k) {
   free(k);
 }
 
+/* creates a hexadecimal string of a hash of a username. used to create a unique
+common name for a X509 certificate */
+char *gen_hex_of_username_hash(char *username) {
+  unsigned char *hash = NULL;
+  char *hex_hash = NULL, tmp[USERNAME_MAX+1] = "";
+
+  memset(tmp, '\0', USERNAME_MAX+1);
+  memcpy(tmp, username, USERNAME_MAX);
+
+  hash = hash_input(tmp, strlen(tmp));
+  if (hash == NULL)
+    return NULL;
+
+  hex_hash = safe_malloc(sizeof(char) * (SHA256_DIGEST_LENGTH*2)+1);
+  if (hex_hash == NULL) {
+    free(hash);
+    return NULL;
+  }
+
+  for (unsigned int i = 0; i < SHA256_DIGEST_LENGTH; i++)
+    sprintf(&hex_hash[i*2], "%02X", hash[i]);
+  hex_hash[SHA256_DIGEST_LENGTH*2] = '\0';
+
+  free(hash);
+  return hex_hash;
+}
+
+/* the function calls the trusted third party to create a certificate of the
+key.pem file in the clientkeys/ directory */
+int execute_ttp_script(char *username) {
+  int ret = -1;
+  char exec_script[200] = "./trustedthirdparty.sh ";
+  char ignore_output[100] = " >/dev/null 2>&1";
+  char *hashed_username = NULL;
+
+  if (username == NULL)
+    goto cleanup;
+
+  hashed_username = gen_hex_of_username_hash(username);
+  if (hashed_username == NULL)
+    goto cleanup;
+
+  strncat(exec_script, hashed_username, SHA256_DIGEST_LENGTH*2);
+  strncat(exec_script, ignore_output, strlen(ignore_output));
+
+  if (system("chmod 755 trustedthirdparty.sh") < 0)
+    goto cleanup;
+  if (system(exec_script) < 0)
+    goto cleanup;
+  ret = 1;
+  cleanup:
+
+  free(hashed_username);
+  return ret;
+}
+
+/* this function reads a certificate from disk, writes it to memory and returns it as a character
+array, the size is stored in outlen */
+char *gen_x509_certificate(char *username, unsigned int *outlen) {
+  int ret;
+  const char certpath[] = "clientkeys/cert.pem";
+  char *certificate = NULL;
+  X509 *cert = NULL;
+  BIO *bio = NULL;
+  FILE *keyfile = NULL;
+
+  ret = execute_ttp_script(username);
+  if (ret < 1)
+    goto cleanup;
+
+  keyfile = fopen(certpath, "r");
+  if (keyfile == NULL)
+    goto cleanup;
+
+  cert = PEM_read_X509(keyfile, NULL, NULL, NULL);
+  fclose(keyfile);
+  if (cert == NULL)
+    goto cleanup;
+
+  bio = BIO_new(BIO_s_mem());
+  if (bio == NULL)
+    goto cleanup;
+
+  ret = PEM_write_bio_X509(bio, cert);
+  if (ret < 1)
+    goto cleanup;
+
+  *outlen = BIO_pending(bio);
+  certificate = safe_malloc(sizeof(char) * (*outlen+1));
+  if (certificate == NULL)
+    goto cleanup;
+
+  BIO_read(bio, certificate, *outlen);
+  certificate[*outlen] = '\0';
+  cleanup:
+
+  BIO_free_all(bio);
+  X509_free(cert);
+  return certificate;
+}
+
+/* returns a X509 certificate from a certificate stored in memory */
+X509 *get_x509_from_array(char *cert, unsigned int certlen) {
+  X509 *certificate = NULL;
+  BIO *bio = NULL;
+
+  bio = BIO_new_mem_buf(cert, certlen);
+  if (bio == NULL)
+    goto cleanup;
+
+  certificate = PEM_read_bio_X509(bio, NULL, NULL, NULL);
+  if (certificate == NULL)
+    goto cleanup;
+
+  cleanup:
+
+  BIO_free_all(bio);
+  return certificate;
+}
+
+/* gets the public key associated with an X509 certificate, PEM encoded in a char array */
+char *obtain_pubkey_from_x509(char *cert, unsigned int certlen, unsigned int *publen) {
+  int ret;
+  char *pubkey = NULL;
+  X509 *certificate = NULL;
+  EVP_PKEY *key = NULL;
+  BIO *bio = NULL;
+
+  if (cert == NULL)
+    return NULL;
+
+  certificate = get_x509_from_array(cert, certlen);
+
+  key = X509_get0_pubkey(certificate);
+  if (key == NULL)
+    goto cleanup;
+
+  bio = BIO_new(BIO_s_mem());
+  if (bio == NULL)
+    goto cleanup;
+
+  ret = PEM_write_bio_PUBKEY(bio, key);
+  if (ret < 1)
+    goto cleanup;
+
+  *publen = BIO_pending(bio);
+  pubkey = safe_malloc(sizeof(char) * *publen+1);
+  if (pubkey == NULL)
+    goto cleanup;
+
+  BIO_read(bio, pubkey, *publen);
+  pubkey[*publen] = '\0';
+
+  cleanup:
+
+  X509_free(certificate);
+  BIO_free_all(bio);
+  return pubkey;
+}
+
+
 /* applies AES-128-cbc encryption to the given output buffer, based on the given
 initialization vector and key. The key and IV are 16 bytes. The function
 also takes an 'int enc' argument like the actual openSSL interface. This specifies
