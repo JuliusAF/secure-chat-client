@@ -25,7 +25,7 @@ CLIENT_SOURCES = src/client.c src/client_utilities.c \
 								 $(SHARED_SOURCES)
 
 CLIENT_HEADERS = src/client_utilities.h src/client_network.h \
-								 $(SHARED_HEADERS)
+								 $(SHARED_HEADERS) src/parse_server_input.h
 
 TARGETS = server client
 KEYS = ca-key.pem ca-cert.pem server-key.pem server-csr.pem server-ca-cert.pem
