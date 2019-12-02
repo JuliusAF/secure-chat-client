@@ -15,8 +15,8 @@ typedef struct parsed_client_input {
     struct {
       char *username;
       unsigned char *hash_password;
-      unsigned int publen;
-      char *pubkey;
+      unsigned int certlen;
+      char *cert;
       unsigned char *iv;
       unsigned int encrypt_sz;
       unsigned char *encrypted_keys;

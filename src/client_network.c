@@ -21,7 +21,9 @@ The format of the serialization is:
 - the size of the private key
 - the private key
 - the size of the public key
-- the public key*/
+- the public key
+- the size of the certificate
+- the certificate */
 unsigned char *serialize_keypair(keypair_t *k, int size) {
   int index;
   unsigned char *serialized;
@@ -50,7 +52,7 @@ unsigned char *serialize_keypair(keypair_t *k, int size) {
 }
 
 /* converts a byte stream containing the key pair back into a keypair_t struct.
-The format of the bytes is privlen, privkey, publen, punkey */
+The format of the bytes is privlen, privkey, publen, pubkey, certlen, cert */
 keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
   unsigned char *tmp, *tmpend;
   keypair_t *keypair = NULL;
@@ -63,7 +65,7 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
     return NULL;
   keypair->privkey = NULL;
   keypair->pubkey = NULL;
-  keypair ->cert = NULL;
+  keypair->cert = NULL;
 
   tmp = serialized;
   tmpend = tmp + size;
@@ -163,7 +165,7 @@ unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypai
     goto cleanup;
   }
 
-  payload_sz = USERNAME_MAX + SHA256_DIGEST_LENGTH + sizeof(int) + k->publen +
+  payload_sz = USERNAME_MAX + SHA256_DIGEST_LENGTH + sizeof(int) + k->certlen +
                IV_SIZE + sizeof(int) + encrypted_sz;
   *size = payload_sz;
 
@@ -180,10 +182,10 @@ unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypai
   tmp += USERNAME_MAX;
   memcpy(tmp, hashed_pass, SHA256_DIGEST_LENGTH);
   tmp += SHA256_DIGEST_LENGTH;
-  memcpy(tmp, &k->publen, sizeof(int));
+  memcpy(tmp, &k->certlen, sizeof(int));
   tmp += sizeof(int);
-  memcpy(tmp, k->pubkey, k->publen);
-  tmp += k->publen;
+  memcpy(tmp, k->cert, k->certlen);
+  tmp += k->certlen;
   memcpy(tmp, iv, IV_SIZE);
   tmp += IV_SIZE;
   memcpy(tmp, &encrypted_sz, sizeof(int));

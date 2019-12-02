@@ -23,8 +23,8 @@ typedef struct client_info {
   SSL *ssl;
   bool is_logged;
   char username[USERNAME_MAX+1];
-  unsigned int publen;
-  char *pubkey;
+  unsigned int certlen;
+  char *cert;
   signed long long last_updated;
 } client_t;
 

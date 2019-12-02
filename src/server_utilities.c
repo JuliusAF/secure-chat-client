@@ -21,8 +21,8 @@ static client_t *initialize_client_info(int connfd, SSL *ssl) {
   c->ssl = ssl;
   c->is_logged = false;
   memset(c->username, '\0', USERNAME_MAX+1);
-  c->publen = 0;
-  c->pubkey = NULL;
+  c->certlen = 0;
+  c->cert = NULL;
   c->last_updated = 0;
 
   return c;
@@ -33,7 +33,7 @@ static void free_client_info(client_t *c) {
   if (c == NULL)
     return;
 
-  free(c->pubkey);
+  free(c->cert);
   free(c);
 }
 
@@ -151,7 +151,6 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 
       bytes_read = read_packet_from_socket(ssl, connfd, input);
 			if (bytes_read < 0) {
-				perror("failed to read bytes");
         free(input);
 				continue;
 			}
@@ -235,27 +234,34 @@ bool is_client_sig_good(packet_t *p, client_t *c) {
     return false;
 
   id = p->header->pckt_id;
-  publen = c->publen;
-  pubkey = c->pubkey;
+
   /* the packets pertaining to the following three packet ids are never signed
   by the client, and thus are not verified */
   if (id == C_MSG_LOGIN || id == C_MSG_REGISTER ||
       id == C_MSG_EXIT)
     return true;
 
+  pubkey = obtain_pubkey_from_x509(c->cert, c->certlen, &publen);
+  if (pubkey == NULL) {
+    free(pubkey);
+    return false;
+  }
 
   /* hash the payload. The hashed payload is what was originally signed */
   hash = hash_input( (char *) p->payload, p->header->pckt_sz);
 
   bio = BIO_new_mem_buf(pubkey, publen);
-  if (bio == NULL)
+  if (bio == NULL) {
+    free(pubkey);
     return false;
+  }
 
   key = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
 
   ret = rsa_verify_sha256(key, p->header->sig, hash, p->header->siglen, SHA256_DIGEST_LENGTH);
 
   BIO_free(bio);
+  free(pubkey);
   free(hash);
   return ret;
 }

@@ -51,7 +51,7 @@ int initialize_database() {
         "USERNAME  TEXT PRIMARY KEY   NOT NULL," \
         "PASSWORD               BLOB  NOT NULL," \
         "SALT                   BLOB  NOT NULL," \
-        "PUBKEY                 BLOB  NOT NULL," \
+        "CERTIFICATE            BLOB  NOT NULL," \
         "IV                     BLOB  NOT NULL," \
         "KEYPAIR                BLOB  NOT NULL," \
         "STATUS                 INT   NOT NULL );";
@@ -151,11 +151,11 @@ Returns:
 -1 on failure pertaining to client account verification etc. */
 
 int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_msg) {
-  char *sql, *name = NULL, *pubkey = NULL;
+  char *sql, *name = NULL, *cert = NULL;
   unsigned char *pass = NULL, *salt = NULL, *hashed_pass = NULL,
   *db_hashed_pass = NULL;
   const unsigned char *tmp = NULL;
-  int ret = -1, rc, step, status, publen;
+  int ret = -1, rc, step, status, certlen;
   sqlite3_stmt *res = NULL;
   sqlite3 *db = NULL;
 
@@ -176,9 +176,9 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
 
   /* this statement gets the password, salt and status from the database for
   verification of login credentials
-  Also gets the length of pubkey and pubkey. If verification is successful, these
+  Also gets the length of certificate and length of it. If verification is successful, these
   are stored by the server */
-  sql = "SELECT PASSWORD, SALT, STATUS, PUBKEY FROM USERS WHERE USERNAME = ?1";
+  sql = "SELECT PASSWORD, SALT, STATUS, CERTIFICATE FROM USERS WHERE USERNAME = ?1";
 
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK)
@@ -222,15 +222,15 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
     db_hashed_pass[SHA256_DIGEST_LENGTH] = '\0';
 
     /* get the size of the public key and allocate the necessary space */
-    publen = sqlite3_column_bytes(res, 3);
-    pubkey = safe_malloc(publen+1 * sizeof *pubkey);
-    if (pubkey == NULL) {
+    certlen = sqlite3_column_bytes(res, 3);
+    cert = safe_malloc(certlen+1 * sizeof *cert);
+    if (cert == NULL) {
       ret = 0;
       goto cleanup;
     }
     tmp = sqlite3_column_blob(res, 3);
-    memcpy(pubkey, tmp, publen);
-    pubkey[publen] = '\0';
+    memcpy(cert, tmp, certlen);
+    cert[certlen] = '\0';
   }
   else {
     /* sqlite3 could not find the row of the specified username, and they therefore
@@ -246,7 +246,7 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
 
   if (memcmp(db_hashed_pass, hashed_pass, SHA256_DIGEST_LENGTH) != 0) {
     strcpy(err_msg, "invalid credentials");
-    free(pubkey);
+    free(cert);
     goto cleanup;
   }
 
@@ -258,7 +258,7 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
   else {
     fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
     ret = 0;
-    free(pubkey);
+    free(cert);
     goto cleanup;
   }
 
@@ -266,7 +266,7 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
   if (step != SQLITE_DONE) {
     fprintf(stderr, "Failed to execute statement: %s \n", sqlite3_errmsg(db));
     ret = 0;
-    free(pubkey);
+    free(cert);
     goto cleanup;
   }
   /* if control has reached here without reporting an error, the function
@@ -274,8 +274,8 @@ int handle_db_login(client_parsed_t *parsed, client_t *client_info, char *err_ms
   client_info->is_logged = true;
   memcpy(client_info->username, name, USERNAME_MAX);
   client_info->username[USERNAME_MAX] = '\0';
-  client_info->publen = publen;
-  client_info->pubkey = pubkey;
+  client_info->certlen = certlen;
+  client_info->cert = cert;
   ret = 1;
 
   cleanup:
@@ -295,10 +295,10 @@ Returns:
 0 on sqlite3 failure or memory failure
 -1 on failure pertaining to client account */
 int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err_msg) {
-  char *sql, *name, *pubkey, *pubkey1;
+  char *sql, *name, *cert, *cert1;
   unsigned char *pass, *iv, *keys,
   *salt = NULL, *hashed_pass = NULL;
-  int ret = -1, rc, step, publen, keyslen;
+  int ret = -1, rc, step, certlen, keyslen;
   sqlite3_stmt *res = NULL;
   sqlite3 *db = NULL;
 
@@ -316,8 +316,8 @@ int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err
 
   name = parsed->reg_packet.username;
   pass = parsed->reg_packet.hash_password;
-  publen = parsed->reg_packet.publen;
-  pubkey = parsed->reg_packet.pubkey;
+  certlen = parsed->reg_packet.certlen;
+  cert = parsed->reg_packet.cert;
   iv = parsed->reg_packet.iv;
   keyslen = parsed->reg_packet.encrypt_sz;
   keys = parsed->reg_packet.encrypted_keys;
@@ -359,7 +359,7 @@ int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err
     sqlite3_bind_text(res, 1, name, -1, SQLITE_STATIC);
     sqlite3_bind_blob(res, 2, hashed_pass, SHA256_DIGEST_LENGTH, SQLITE_STATIC);
     sqlite3_bind_blob(res, 3, salt, SALT_SIZE, SQLITE_STATIC);
-    sqlite3_bind_blob(res, 4, pubkey, publen, SQLITE_STATIC);
+    sqlite3_bind_blob(res, 4, cert, certlen, SQLITE_STATIC);
     sqlite3_bind_blob(res, 5, iv, IV_SIZE, SQLITE_STATIC);
     sqlite3_bind_blob(res, 6, keys, keyslen, SQLITE_STATIC);
   }
@@ -375,21 +375,21 @@ int handle_db_register(client_parsed_t *parsed, client_t *client_info, char *err
     ret = 0;
     goto cleanup;
   }
-  /* create and store pubkey variable for storage in client info struct */
-  pubkey1 = safe_malloc(publen+1 * sizeof *pubkey1);
-  if (pubkey1 == NULL) {
+  /* create and store certificate variable for storage in client info struct */
+  cert1 = safe_malloc(certlen+1 * sizeof *cert1);
+  if (cert1 == NULL) {
     ret = 0;
     goto cleanup;
   }
-  memcpy(pubkey1, pubkey, publen);
-  pubkey1[publen] = '\0';
+  memcpy(cert1, cert, certlen);
+  cert1[certlen] = '\0';
 
   /* client is now logged in so the struct is updated*/
   client_info->is_logged = true;
   memcpy(client_info->username, name, USERNAME_MAX);
   client_info->username[USERNAME_MAX] = '\0';
-  client_info->publen = publen;
-  client_info->pubkey = pubkey1;
+  client_info->certlen = certlen;
+  client_info->cert = cert1;
 
   ret = 1;
 
@@ -646,7 +646,7 @@ msg_queue_t *fetch_db_messages(client_t *client_info) {
   if (db == NULL)
     return NULL;
 
-  sql = "SELECT MESSAGES.ROWID, MESSAGE, PUBKEY, SIGNATURE, RECIPIENT, MESSAGES.IV, S_SYMKEY, R_SYMKEY FROM (USERS, MESSAGES)"
+  sql = "SELECT MESSAGES.ROWID, MESSAGE, CERTIFICATE, SIGNATURE, RECIPIENT, MESSAGES.IV, S_SYMKEY, R_SYMKEY FROM (USERS, MESSAGES)"
         "WHERE ((SENDER = ?1 OR RECIPIENT = ?1 OR RECIPIENT IS NULL) AND"
         "(USERS.USERNAME = MESSAGES.SENDER) AND"
         "(MESSAGES.ROWID > ?2))";
@@ -760,7 +760,7 @@ char *fetch_db_pubkey(char *name, unsigned int *fetchlen, char *err) {
   if (db == NULL)
     return NULL;
 
-  sql = "SELECT PUBKEY FROM USERS WHERE USERNAME = ?1";
+  sql = "SELECT CERTIFICATE FROM USERS WHERE USERNAME = ?1";
 
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK) {

@@ -12,7 +12,7 @@
 #define HEADER_SIZE (sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint32_t) + MAX_SIG_SZ)
 /* The limit here is reasonably higher than what is needed, but
 is defined to ensure a benchmark for packet size */
-#define MAX_PACKET_SIZE 4096
+#define MAX_PACKET_SIZE 6144
 #define MAX_PAYLOAD_SIZE (MAX_PACKET_SIZE - HEADER_SIZE)
 /* a login request has a fixed size defined here */
 #define LOGIN_REQUEST_SIZE USERNAME_MAX + SHA256_DIGEST_LENGTH

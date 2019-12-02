@@ -107,22 +107,22 @@ int parse_client_register(packet_t *packet, client_parsed_t *parsed) {
   memcpy(parsed->reg_packet.hash_password, tmp, SHA256_DIGEST_LENGTH);
   tmp += SHA256_DIGEST_LENGTH;
   parsed->reg_packet.hash_password[SHA256_DIGEST_LENGTH] = '\0';
-  memcpy(&parsed->reg_packet.publen, tmp, sizeof(unsigned int));
+  memcpy(&parsed->reg_packet.certlen, tmp, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
   /* check that the payload has enough space for at least up to the next instance of
   a variable size input */
-  if (tmp + parsed->reg_packet.publen + IV_SIZE + sizeof(unsigned int) > tmpend) {
+  if (tmp + parsed->reg_packet.certlen + IV_SIZE + sizeof(unsigned int) > tmpend) {
     fprintf(stderr, "failed to copy register data 1, would overflow pointer\n");
     return -1;
   }
 
-  parsed->reg_packet.pubkey = safe_malloc(parsed->reg_packet.publen+1 * sizeof *parsed->reg_packet.pubkey);
-  if (parsed->reg_packet.pubkey == NULL)
+  parsed->reg_packet.cert = safe_malloc(parsed->reg_packet.certlen+1 * sizeof *parsed->reg_packet.cert);
+  if (parsed->reg_packet.cert == NULL)
     return -1;
 
-  memcpy(parsed->reg_packet.pubkey, tmp, parsed->reg_packet.publen);
-  tmp += parsed->reg_packet.publen;
-  parsed->reg_packet.pubkey[parsed->reg_packet.publen] = '\0';
+  memcpy(parsed->reg_packet.cert, tmp, parsed->reg_packet.certlen);
+  tmp += parsed->reg_packet.certlen;
+  parsed->reg_packet.cert[parsed->reg_packet.certlen] = '\0';
   memcpy(parsed->reg_packet.iv, tmp, IV_SIZE);
   tmp += IV_SIZE;
   parsed->reg_packet.iv[IV_SIZE] = '\0';
@@ -400,7 +400,7 @@ void initialize_client_parsed(client_parsed_t *p) {
     case C_MSG_REGISTER:
       p->reg_packet.username = NULL;
       p->reg_packet.hash_password = NULL;
-      p->reg_packet.pubkey = NULL;
+      p->reg_packet.cert = NULL;
       p->reg_packet.iv = NULL;
       p->reg_packet.encrypted_keys = NULL;
       break;
@@ -447,7 +447,7 @@ bool is_client_parsed_legal(client_parsed_t *p) {
     case C_MSG_REGISTER:
       if (p->reg_packet.username == NULL ||
           p->reg_packet.hash_password == NULL ||
-          p->reg_packet.pubkey == NULL ||
+          p->reg_packet.cert == NULL ||
           p->reg_packet.iv == NULL ||
           p->reg_packet.encrypted_keys == NULL)
         return false;
@@ -497,7 +497,7 @@ void free_client_parsed(client_parsed_t *p) {
     case C_MSG_REGISTER:
       free(p->reg_packet.username);
       free(p->reg_packet.hash_password);
-      free(p->reg_packet.pubkey);
+      free(p->reg_packet.cert);
       free(p->reg_packet.iv);
       free(p->reg_packet.encrypted_keys);
       break;
