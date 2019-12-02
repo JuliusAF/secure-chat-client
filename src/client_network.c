@@ -213,12 +213,9 @@ packet_t *gen_c_register_packet(command_t *n, request_t *r) {
   if (n == NULL || r == NULL)
     return NULL;
 
-  keys = create_rsa_pair();
+  keys = create_rsa_pair(r->username);
   if (keys == NULL)
     goto cleanup;
-
-  keys->cert = gen_x509_certificate(r->username, &keys->certlen);
-  keys->pubkey = obtain_pubkey_from_x509(keys->cert, keys->certlen, &keys->publen);
 
   if (!is_keypair_legal(keys)) {
     fprintf(stderr, "failed to create key pair\n");
@@ -402,7 +399,7 @@ unsigned char *serialize_pubkey_rqst(command_t *n, user_t *u, unsigned int *payl
   iv = create_rand_salt(IV_SIZE);
   if (iv == NULL)
     return NULL;
-    
+
   /* create the formatted message with date etc. */
   memset(msg, '\0', max);
   ret = create_formatted_msg(msg, n, u);

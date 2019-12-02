@@ -110,15 +110,16 @@ unsigned char *gen_master_key(char *username, char *password) {
   return key;
 }
 
-/* creates a rsa private key stores it in the key pair struct. These keys
+/* creates a rsa private key and stores it in the key pair struct. These keys
 are created and will be linked to the user who commenced the register request.
 It writes this private key to the file specified in keypath, used to create a
 CA signed certificate and a public key
 
 the function utilizes an error boolean and the goto jump to check whether an
 error has occured, and returns NULL if yes and the rsa key pair struct if not */
-keypair_t *create_rsa_pair() {
-  const char keypath[] = "clientkeys/key.pem";
+keypair_t *create_rsa_pair(char *username) {
+  const char extension[] = "-key.pem";
+  char keypath[200] = "clientkeys/", *username_hash = NULL;
   int ret, keylen = 0;
   bool error = false;
   const int bits = 2048, exponent = 65537;
@@ -155,6 +156,15 @@ keypair_t *create_rsa_pair() {
     goto cleanup;
   }
 
+  username_hash = gen_hex_of_username_hash(username);
+  if (username_hash == NULL) {
+    error = true;
+    goto cleanup;
+  }
+
+  strncat(keypath, username_hash, SHA256_DIGEST_LENGTH*2);
+  strcat(keypath, extension);
+
   /* writes the private key to file */
   keyfile = fopen(keypath, "w+");
   if (keyfile == NULL) {
@@ -164,6 +174,14 @@ keypair_t *create_rsa_pair() {
   ret = PEM_write_RSAPrivateKey(keyfile, rsa, NULL, NULL, 0, NULL, NULL);
   fclose(keyfile);
   if (ret < 1) {
+    error = true;
+    goto cleanup;
+  }
+
+  /* creates the public key and certificate and stores it in the struct */
+  keys->cert = gen_x509_certificate(username, &keys->certlen);
+  keys->pubkey = obtain_pubkey_from_x509(keys->cert, keys->certlen, &keys->publen);
+  if (keys->cert == NULL || keys->pubkey == NULL) {
     error = true;
     goto cleanup;
   }
@@ -196,6 +214,7 @@ keypair_t *create_rsa_pair() {
 
   cleanup:
 
+  free(username_hash);
   BIO_free_all(biopriv);
   BN_free(bignum);
   RSA_free(rsa);
@@ -287,8 +306,8 @@ int execute_ttp_script(char *username) {
 array, the size is stored in outlen */
 char *gen_x509_certificate(char *username, unsigned int *outlen) {
   int ret;
-  const char certpath[] = "clientkeys/cert.pem";
-  char *certificate = NULL;
+  const char extension[] = "-cert.pem";
+  char *certificate = NULL, certpath[200] = "clientkeys/", *username_hash = NULL;
   X509 *cert = NULL;
   BIO *bio = NULL;
   FILE *keyfile = NULL;
@@ -299,6 +318,13 @@ char *gen_x509_certificate(char *username, unsigned int *outlen) {
   ret = execute_ttp_script(username);
   if (ret < 1)
     goto cleanup;
+
+  username_hash = gen_hex_of_username_hash(username);
+  if (username_hash == NULL)
+    goto cleanup;
+
+  strncat(certpath, username_hash, SHA256_DIGEST_LENGTH*2);
+  strcat(certpath, extension);
 
   keyfile = fopen(certpath, "r");
   if (keyfile == NULL)
@@ -327,6 +353,7 @@ char *gen_x509_certificate(char *username, unsigned int *outlen) {
   certificate[*outlen] = '\0';
   cleanup:
 
+  free(username_hash);
   BIO_free_all(bio);
   X509_free(cert);
   return certificate;

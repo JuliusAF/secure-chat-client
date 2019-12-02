@@ -42,7 +42,7 @@ unsigned char *hash_password(char *input, unsigned int size, unsigned char *salt
 unsigned char *hash_input(char *input, unsigned int size);
 unsigned char *gen_master_key(char *username, char *password);
 /* functions for the keypair_t struct */
-keypair_t *create_rsa_pair(void);
+keypair_t *create_rsa_pair(char *username);
 bool is_keypair_legal(keypair_t *k);
 void free_keypair(keypair_t *k);
 /* functions for creating/using an X509 certificate */
