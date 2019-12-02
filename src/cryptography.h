@@ -30,8 +30,10 @@ when an ssl connection is established*/
 typedef struct rsa_keypairs {
   unsigned int privlen;
   unsigned int publen;
+  unsigned int certlen;
   char *privkey;
   char *pubkey;
+  char *cert;
 } keypair_t;
 
 /* functions to create random bytes, hash input and create the master key */

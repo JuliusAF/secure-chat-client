@@ -110,19 +110,23 @@ unsigned char *gen_master_key(char *username, char *password) {
   return key;
 }
 
-/* creates an rsa key pair and stores it in the key pair struct. These keys
-are created and will be linked to the user who commenced the register request
+/* creates a rsa private key stores it in the key pair struct. These keys
+are created and will be linked to the user who commenced the register request.
+It writes this private key to the file specified in keypath, used to create a
+CA signed certificate and a public key 
 
 the function utilizes an error boolean and the goto jump to check whether an
 error has occured, and returns NULL if yes and the rsa key pair struct if not */
 keypair_t *create_rsa_pair() {
+  const char keypath[] = "clientkeys/key.pem";
   int ret, keylen = 0;
   bool error = false;
   const int bits = 2048, exponent = 65537;
   BIGNUM *bignum = NULL;
-  BIO *biopriv = NULL, *biopub = NULL;
+  BIO *biopriv = NULL;
   RSA *rsa = NULL;
   keypair_t *keys = NULL;
+  FILE *keyfile = NULL;
 
   keys = safe_malloc(sizeof *keys);
   if (keys == NULL) {
@@ -133,6 +137,7 @@ keypair_t *create_rsa_pair() {
   to free_keypair() */
   keys->privkey = NULL;
   keys->pubkey = NULL;
+  keys->cert = NULL;
 
   /* sets the BIGNUM * and creates an RSA key pair */
   bignum = BN_new();
@@ -147,6 +152,19 @@ keypair_t *create_rsa_pair() {
   if (ret != 1) {
     error = true;
     ERR_print_errors_fp(stderr);
+    goto cleanup;
+  }
+
+  /* writes the private key to file */
+  keyfile = fopen(keypath, "w+");
+  if (keyfile == NULL) {
+    error = true;
+    goto cleanup;
+  }
+  ret = PEM_write_RSAPrivateKey(keyfile, rsa, NULL, NULL, 0, NULL, NULL);
+  fclose(keyfile);
+  if (ret < 1) {
+    error = true;
     goto cleanup;
   }
 
@@ -170,42 +188,14 @@ keypair_t *create_rsa_pair() {
     error = true;
     goto cleanup;
   }
-  /* reads the private key into the character array and null terminates it
-  for security */
+  /* reads the private key into the character array and null terminates it */
   BIO_read(biopriv, keys->privkey, keylen);
   keys->privkey[keylen] = '\0';
   keys->privlen = keylen;
   BIO_flush(biopriv);
 
-  /* reads the public key stored in the RSA struct by opening a memroy BIO and
-  places it into a character array in PEM format */
-  biopub = BIO_new(BIO_s_mem());
-  if (biopub == NULL) {
-    error = true;
-    goto cleanup;
-  }
-  ret = PEM_write_bio_RSAPublicKey(biopub, rsa);
-  if (ret != 1) {
-    error = true;
-    goto cleanup;
-  }
-
-  keylen = BIO_pending(biopub);
-  keys->pubkey = safe_malloc(keylen+1 * sizeof *keys->pubkey);
-  if (keys->pubkey == NULL) {
-    error = true;
-    goto cleanup;
-  }
-  /* reads the public key into the character array and null terminates it
-  for security */
-  BIO_read(biopub, keys->pubkey, keylen);
-  keys->pubkey[keylen] = '\0';
-  keys->publen = keylen;
-  BIO_flush(biopub);
-
   cleanup:
 
-  BIO_free_all(biopub);
   BIO_free_all(biopriv);
   BN_free(bignum);
   RSA_free(rsa);
@@ -220,7 +210,7 @@ keypair_t *create_rsa_pair() {
 /* helper function to for key pairs that checks whether a given keypair_t
 struct is legal (no pointers are NULL) */
 bool is_keypair_legal(keypair_t *k) {
-  return (k != NULL && k->privkey != NULL && k->pubkey != NULL);
+  return (k != NULL && k->privkey != NULL && k->pubkey != NULL && k->cert != NULL);
 }
 
 /* helper function that frees a given key pair*/
@@ -228,6 +218,7 @@ void free_keypair(keypair_t *k) {
   if (k == NULL)
     return;
 
+  free(k->cert);
   free(k->privkey);
   free(k->pubkey);
   free(k);
@@ -299,6 +290,9 @@ char *gen_x509_certificate(char *username, unsigned int *outlen) {
   BIO *bio = NULL;
   FILE *keyfile = NULL;
 
+  if (username == NULL)
+    return NULL;
+
   ret = execute_ttp_script(username);
   if (ret < 1)
     goto cleanup;
@@ -321,6 +315,7 @@ char *gen_x509_certificate(char *username, unsigned int *outlen) {
     goto cleanup;
 
   *outlen = BIO_pending(bio);
+
   certificate = safe_malloc(sizeof(char) * (*outlen+1));
   if (certificate == NULL)
     goto cleanup;

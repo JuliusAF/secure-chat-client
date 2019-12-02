@@ -109,7 +109,6 @@ void sign_client_packet(packet_t *p, user_t *u) {
 	else
 		p->header->siglen = ret;
 
-
 	cleanup:
 
 	free(hash);
@@ -120,12 +119,13 @@ The signature is transmitted as part of a message (public or private) */
 bool verify_client_payload(char *pkey, unsigned int plen, unsigned char *s, unsigned int slen, unsigned char *hash) {
 	bool ret;
 	BIO *bio;
-  EVP_PKEY *key = EVP_PKEY_new();
-  RSA *rsa;
+	EVP_PKEY *key;
 
-  bio = BIO_new_mem_buf(pkey, plen);
-  rsa = PEM_read_bio_RSAPublicKey(bio, NULL, NULL, NULL);
-  EVP_PKEY_assign_RSA(key, rsa);
+	bio = BIO_new_mem_buf(pkey, plen);
+	if (bio == NULL)
+		return false;
+
+  key = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
 
   ret = rsa_verify_sha256(key, s, hash, slen, SHA256_DIGEST_LENGTH);
 
@@ -524,6 +524,10 @@ void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
 	u->rsa_keys = keys;
 	u->is_logged = true;
 	r->is_request_active = false;
+
+	printf("privkey: %s\n", u->rsa_keys->privkey);
+	printf("pubkey: %s\n", u->rsa_keys->pubkey);
+	printf("cert: %s\n", u->rsa_keys->cert);
 
 	if (p->id == S_META_LOGIN_PASS)
 		printf("authentification succeeded\n");

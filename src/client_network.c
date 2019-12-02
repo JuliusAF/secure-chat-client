@@ -41,6 +41,10 @@ unsigned char *serialize_keypair(keypair_t *k, int size) {
   memcpy(serialized+index, &k->publen, sizeof(unsigned int));
   index += sizeof(unsigned int);
   memcpy(serialized+index, k->pubkey, k->publen);
+  index += k->publen;
+  memcpy(serialized+index, &k->certlen, sizeof(unsigned int));
+  index += sizeof(unsigned int);
+  memcpy(serialized+index, k->cert, k->certlen);
 
   return serialized;
 }
@@ -59,14 +63,21 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
     return NULL;
   keypair->privkey = NULL;
   keypair->pubkey = NULL;
+  keypair ->cert = NULL;
 
   tmp = serialized;
   tmpend = tmp + size;
 
+  /* copy the size of the private key, check for overflow */
+  if ((tmp + sizeof(unsigned int)) > tmpend) {
+    free_keypair(keypair);
+    return NULL;
+  }
   memcpy(&keypair->privlen, tmp, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
+
+  /* copy the private key and size of public key, check for overflow */
   if ((tmp + keypair->privlen + sizeof(unsigned int)) > tmpend) {
-    fprintf(stderr, "can't copy private key, would overflow \n");
     free_keypair(keypair);
     return NULL;
   }
@@ -81,8 +92,9 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
   keypair->privkey[keypair->privlen] = '\0';
   memcpy(&keypair->publen, tmp, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
-  if ((tmp + keypair->publen) > tmpend) {
-    fprintf(stderr, "can't copy public key, would overflow\n");
+
+  /* copy public key and size of certificate, check for overflow */
+  if ((tmp + keypair->publen + sizeof(unsigned int)) > tmpend) {
     free_keypair(keypair);
     return NULL;
   }
@@ -94,6 +106,22 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
   }
   memcpy(keypair->pubkey, tmp, keypair->publen);
   keypair->pubkey[keypair->publen] = '\0';
+  tmp += keypair->publen;
+  memcpy(&keypair->certlen, tmp, sizeof(unsigned int));
+  tmp += sizeof(unsigned int);
+
+  if ((tmp + keypair->certlen) > tmpend) {
+    free_keypair(keypair);
+    return NULL;
+  }
+
+  keypair->cert = safe_malloc(keypair->certlen+1 * sizeof *keypair->cert);
+  if (keypair->cert == NULL) {
+    free_keypair(keypair);
+    return NULL;
+  }
+  memcpy(keypair->cert, tmp, keypair->certlen);
+  keypair->cert[keypair->certlen] = '\0';
 
   return keypair;
 }
@@ -113,7 +141,7 @@ unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypai
       masterkey == NULL)
     return NULL;
 
-  keypair_sz = (sizeof(int)*2) + k->privlen + k->publen;
+  keypair_sz = (sizeof(int)*3) + k->privlen + k->publen + k->certlen;
   serial_keys = serialize_keypair(k, keypair_sz);
   if (serial_keys == NULL)
     return NULL;
@@ -175,7 +203,7 @@ unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypai
 /* this function actually generates a packet in the form of packet_t. this will
 be passed to a write function for transmission over the socket */
 packet_t *gen_c_register_packet(command_t *n, request_t *r) {
-  int payload_sz;
+  int payload_sz = 0;
   packet_hdr_t *header = NULL;
   unsigned char *payload = NULL;
   keypair_t *keys = NULL;
@@ -184,9 +212,15 @@ packet_t *gen_c_register_packet(command_t *n, request_t *r) {
     return NULL;
 
   keys = create_rsa_pair();
+  if (keys == NULL)
+    goto cleanup;
+
+  keys->cert = gen_x509_certificate(r->username, &keys->certlen);
+  keys->pubkey = obtain_pubkey_from_x509(keys->cert, keys->certlen, &keys->publen);
+
   if (!is_keypair_legal(keys)) {
-    free_keypair(keys);
-    return NULL;
+    fprintf(stderr, "failed to create key pair\n");
+    goto cleanup;
   }
 
   /* the size of the payload is calculated in the following function and
@@ -203,6 +237,8 @@ packet_t *gen_c_register_packet(command_t *n, request_t *r) {
     free(payload);
     return NULL;
   }
+
+  cleanup:
 
   free_keypair(keys);
   return pack_packet(header, payload);

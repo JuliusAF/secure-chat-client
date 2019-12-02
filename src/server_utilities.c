@@ -174,8 +174,8 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
       }
       else if (!is_client_sig_good(packet, client_info)) {
         fprintf(stderr, "bad packet signature\n");
-        packet = gen_s_error_packet(S_MSG_GENERIC_ERR, "failed to verify author of request");
-        send_packet_over_socket(ssl, connfd, packet);
+        packet_t *packet1 = gen_s_error_packet(S_MSG_GENERIC_ERR, "failed to verify author of request");
+        send_packet_over_socket(ssl, connfd, packet1);
         goto cleanup;
       }
 
@@ -230,7 +230,6 @@ bool is_client_sig_good(packet_t *p, client_t *c) {
 	char *pubkey;
 	BIO *bio;
   EVP_PKEY *key;
-  RSA *rsa;
 
   if (!is_packet_legal(p) || c == NULL)
     return false;
@@ -244,13 +243,15 @@ bool is_client_sig_good(packet_t *p, client_t *c) {
       id == C_MSG_EXIT)
     return true;
 
-  key = EVP_PKEY_new();
+
   /* hash the payload. The hashed payload is what was originally signed */
   hash = hash_input( (char *) p->payload, p->header->pckt_sz);
 
   bio = BIO_new_mem_buf(pubkey, publen);
-  rsa = PEM_read_bio_RSAPublicKey(bio, NULL, NULL, NULL);
-  EVP_PKEY_assign_RSA(key, rsa);
+  if (bio == NULL)
+    return false;
+
+  key = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
 
   ret = rsa_verify_sha256(key, p->header->sig, hash, p->header->siglen, SHA256_DIGEST_LENGTH);
 
