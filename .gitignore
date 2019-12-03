@@ -52,6 +52,9 @@ Module.symvers
 Mkfile.old
 test/
 test-tmp/
+ttpkeys/*.pem
+serverkeys/*.pem
+clientkeys/*.pem
 testinput.txt
 dkms.conf
 
