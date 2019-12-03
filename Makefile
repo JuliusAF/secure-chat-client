@@ -44,7 +44,7 @@ tarball: sp-assignment1.tar.gz
 
 sp-assignment1.tar.gz: $(SERVER_SOURCES) $(SERVER_HEADERS) \
 											 $(CLIENT_HEADERS) $(CLIENT_SOURCES) $(META) \
-											 ttpkeys serverkeys clientkeys
+											 ttpkeys serverkeys clientkeys trustedthirdpart.sh
 	tar -czf $@ $^
 
 clean:
