@@ -8,6 +8,30 @@ I realise the code is quite large, but I hope it is not too difficult to underst
  - A function called 'handle_' acts on some parsed information. For example, the handle_client_input() function and the other 'handle_client_' functions it called in server_utilities.h act on some parsed input from the client.
  - The source of a definition or function for the server and client is denoted by either an S or C respectively. For example, the definitions for client packet identification as seen in network.h start with 'C_'. This denotes that the identification is for a packet sent from the client. Likewise, the 'gen_c_' functions in client_network.c generate packets for the client to send to the server.
 
+The execution of a user's command is as follows:
+ - user types into stdin
+ - client.c reads from stdin
+ - user input is parsed in parse_user_input.c
+ - parsed user input is handled with handle_user_input() in client_utilities.c
+ - a packet is created using some 'gen_' function from client_network.c
+ - packet is sent over the socket to the server
+ - server reads packet in server_utilities.c
+ - server parses packet in parse_client_input.c
+ - parsed packet from server is handled with handle_client_input() in server_utilities.c
+ - database is accessed in database.c based on command invoked
+ - information is fetched from the database in database.c
+ - using information fetched from the database, a packet is created with some 'gen_' function in server_network.c
+ - packet is sent over the network to the client
+ - server packet is read in client.c
+ - server packet is parsed in parse_server_input.c
+ - parsed server input is handled with handle_server_input() in client_utilities.c
+ - here most execution comes to an end (a certificate request requires the client send another packet to the server
+   and await response)
+
+The functions in cryptography.c, network.c and safe_wrappers.c are used throughout the code and set up a lot of the primitive operations that are part of the protocol, such as encryption/decryption, signing, or sending and reading packets
+
+Another thing to note is that certificate verification verifies the certificate authority that signed a certificate. If make is called again after an executable has already been built and information has been input into the database, all packet authentication from users that existed before the second make call will fail. The verification is defined in verify_x509_certificate() in cryptography.c.
+
 # DATABASE
 
 The database contains two tables; USERS and MESSAGES respectively. It is created in database.c with the function initialize_database();
@@ -23,16 +47,16 @@ The USERS table contains the following fields (no field may be null):
 - Username
 - Hashed password
 - Salt used to hash password
-- Public key
+- Certificate
 - Initialization vector used during key pair encryption
 - Encrypted key pair of user
 - Status of user (0 == offline, 1 == online)
 
 The database stores the salt so that on login attempts the given password can be hashed with the respective salt. This process is done in the handle_db_register() and handle_db_login() functions. The register function creates a random salt and hashes the password received from the client, while the login function fetches the salt, uses it on the provided password and compares it with the hash stored in the database.
 
-The public key is stored so that when two clients want to create an end-to-end encrypted message, the sender can request the public key of the recipient.
+The certificate is stored so that when two clients want to create an end-to-end encrypted message, the sender can request the certificate of the recipient, verify it belongs to them and is signed by the CA, and encrypt the symmetric key with their public key.
 
-The encrypted key pair can not be decrypted without access to the original password the user entered. It is sent from the server to the client on a successful login or register attempt. This links the client with their RSA key pair.
+The encrypted key pair can not be decrypted without access to the original password the user entered. It (the encrypted key pair) is sent from the server to the client on a successful login or register attempt. This links the client with their RSA key pair and certificate.
 
 ### MESSAGES:
 
@@ -54,9 +78,14 @@ The initialization vector and symmetric keys are used in conjunction with privat
 
 Various cryptography protocols are adopted in order to meet the security requirements.
 
-SSL is utilized to verify the server when a client connects to it. This ensures the integrity of data sent from server to client. The client verifies both the server certificate (copied from the serverkeys directory to the clientkeys directory when MAKE is called) and the common name of the expected server with that of the name in the certificate. The expected common name is stored in cryptography.h (it is server.example.com). The SSL connection is established on the server side in server_utilities.c in function worker(), while on the client side it is started in main().
+SSL is utilized to verify the server when a client connects to it. This ensures the integrity of data sent from server to client. The client verifies both the server certificate (copied from the serverkeys directory to the clientkeys directory when MAKE is called) and the common name of the expected server with that of the name in the certificate. The expected common name is stored in cryptography.h (it is 'server.example.com'). The SSL connection is established on the server side in server_utilities.c in function worker(), while on the client side it is started in main().
 
-Whenever a user logs in, they create a master key that is a function of the submitted plaintext username and password; this is done in cryptography.c with the function gen_master_key(). This masterkey is used to encrypt and decrypt the RSA key pair (created using create_rsa_pair() in cryptography.c) that belongs to that user using AES-128-CBC encryption defined in apply_aes() in cryptography.c. This key pair is stored in the database and retrieved is on login. The plaintext password is never saved, nor is it transmitted to the server. As such, the only way the masterkey can be computed is on the client side when a register or login command is invoked. The encryption method used is AES-128-CBC and utilizes a random initialization vector (created using create_rand_salt() in cryptography.c) that is also stored on the server. This means the server cannot decrypt the key pair.
+Whenever a user logs in the following process creates and secures their RSA key pair:
+- they create a master key that is a function of the submitted plaintext username and password; this is done in cryptography.c with the function gen_master_key().
+- This masterkey is used to encrypt and decrypt the RSA key pair (created using create_rsa_pair() in cryptography.c) that belongs to that user using AES-128-CBC encryption defined in apply_aes() in cryptography.c.
+- This encrypted key pair is stored in the database and retrieved on login.
+- The plaintext password is never saved, nor is it transmitted to the server. As such, the only way the masterkey can be computed is on the client side when a register or login command is invoked.
+- The encryption method used is AES-128-CBC and utilizes a random initialization vector (created using create_rand_salt() in cryptography.c) that is also stored on the server. This means the server cannot decrypt the key pair.
 
 The password of a user is hashed twice (using hash_password() in cryptography.c):
 
@@ -64,25 +93,38 @@ The password of a user is hashed twice (using hash_password() in cryptography.c)
 - The password is hashed again on the server side before it is stored/used for comparison. This hash is with a salt, which is also stored in the database.
 - The hashing algorithm used is SHA256.
 
+Usage of X509 certificates:
+
+Any time a client's signature must be checked, the X509 certificate is used. The creation of the certificate is in create_rsa_keypair() in cryptography.c and is as follows:
+
+- An RSA private key is created programmatically.
+- This private key is saved to file as a .pem. The name of the file is the hexadecimal version of the hashed username of the person making the request, and thus generating this keypair. The hash is used to avoid any potential problems with invalid file name characters, and because the hash of a username is unique and identifying.
+- The trustedthirdparty.sh script is called from execute_ttp_script() in cryptography.c, which is in turn called from gen_x509_certificate() in create_rsa_keypair() in cryptography.c. The shell script creates a certificate signing request titled "hashed username"-csr.pem. This CSR is in turn processed into a certificate with the name "hashed username"-cert.pem. The common name of the certificate is the hash of the username.
+- The public key of this certificate is extracted with obtain_pubkey_from_x509() in cryptography.c.
+
+When a signature is checked, both on the server side when a client packet is checked, and on the client side when a a client verifies another client's (or it's own if they are the sender), the certificate is validated against both the CA used to sign the certificate, and the common name in the certificate. If this passes, the public key is extracted and using to verify the signature.
+
 Messages between clients (private messages) are end-to-end encrypted:
 
 (sender refers to the client that started the private message request)
 
-- The sender asks the server for the recipients public key.
+- The sender asks the server for the recipients certificate handle_user_privmsg() in client_utilities.c sends a pubkey_rqst to the server (packet is created with gen_c_pubkey_rqst_packet() in client_network.c).
+- The sender verifies the returned certificate and extracts the public key. This is done in handle_server_pubkey_response() in client_utilities.c.
 - The sender creates a random key and initialization vector (both 16 bytes using create_rand_salt()).
 - The sender encrypts the message using AES-128-CBC with the random key and IV (using apply_aes()).
 - The sender creates two copies of the random key. One copy is encrypted with the senders public key, and the other is encrypted with the recipients public key. The encryption and decryption functions are apply_rsa_encrypt() and apply_rsa_decrypt() respectively, located in cryptography.c.
-- This is all sent to the server and stored in the database
+  - These steps are all executed as part of the packet creation in gen_c_privmsg_packet() in client_network.c
+- This is all sent to the server and stored in the database (using handle_db_privmsg() in database.c)
 
-The server can therefore not decrypt a private message, and in the event of a database breach the confidentiality of the messages is ensured.
+The server can therefore not decrypt a private message, and in the event of a database breach the confidentiality of the messages is ensured. The use of the certificate also ensures that the recipient's public key used to encrypt the symmetric actually belongs to them.
 
 Message verification:
 
-When a public or private message is received, the order of the packet is preserved from client to server and server to client. This means the signature of the original packet sent from client to server can be verified to check the identity of the sender. This is done in the function verify_client_payload() in client_utilities.c.
+When a public or private message is received, the order of the packet is preserved from client to server and server to client. This means the signature of the original packet sent from client to server can be verified to check the identity of the sender. This is done in the function verify_client_payload() in client_utilities.c. It utilizes the sender's certificate. It verifies the CA used to sign it and the common name of the certificate.
 
 Signatures:
 
-Packets from clients to servers are signed where appropriate (it is the hash of the payload that is signed). That is: a login or register request is not signed, as the client does not have their key pair yet. The authentication offered by the password is assumed to be enough.The exit command is not transmitted over the network. The other types of messages are signed by the client. The signing on the client side is done in sign_client_packet() in client_utilities.c. On the server side, the is_client_sig_good() function verifies a client's signature;
+Packets from clients to servers are signed where appropriate (it is the hash of the payload that is signed). That is: a login or register request is not signed, as the client does not have their key pair yet. The authentication offered by the password is assumed to be enough. The exit command is not transmitted over the network. The other types of messages are signed by the client. The signing on the client side is done in sign_client_packet() in client_utilities.c. On the server side, the is_client_sig_good() function verifies a client's signature;
 
 Messages from server to client are not signed, as the usage of SSL should add the properties of authentication and integrity already.
 
@@ -170,7 +212,7 @@ The identification code is C_MSG_PUBMSG
 
 - 4 bytes for size of public key
 - variable size for the key
-- 20 bytes for sender of message 
+- 20 bytes for sender of message
 - 4 bytes for the size of the message
 - variable size for the message
 

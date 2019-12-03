@@ -165,7 +165,6 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
       if (packet == NULL)
         goto cleanup;
 
-
       /* check that a login condition is satisfies and if it is check the signature of
       a packet for all appropriate instances */
       if (!is_login_cond_satisfied(packet, client_info)) {

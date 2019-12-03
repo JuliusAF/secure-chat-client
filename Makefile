@@ -65,19 +65,22 @@ client: $(CLIENT_SOURCES:.c=.o)
 $(CLIENT_SOURCES:.c=.o): $(CLIENT_HEADERS)
 
 ca-cert.pem: ttpkeys/ca-key.pem
-	openssl req -new -x509 -key ttpkeys/ca-key.pem -out ttpkeys/ca-cert.pem -nodes -subj '/CN=ca\.example\.com/'
+	openssl req -new -x509 -key ttpkeys/ca-key.pem -out ttpkeys/ca-cert.pem \
+	-nodes -subj '/CN=ca\.example\.com/' 2> /dev/null
 
 ca-key.pem:
-	openssl genrsa -out ttpkeys/ca-key.pem
+	openssl genrsa -out ttpkeys/ca-key.pem 2> /dev/null
 
 server-ca-cert.pem: ttpkeys/ca-cert.pem ttpkeys/ca-key.pem serverkeys/server-csr.pem
-	openssl x509 -req -CA ttpkeys/ca-cert.pem -CAkey ttpkeys/ca-key.pem -CAcreateserial -in serverkeys/server-csr.pem -out serverkeys/server-ca-cert.pem
+	openssl x509 -req -CA ttpkeys/ca-cert.pem -CAkey ttpkeys/ca-key.pem -CAcreateserial \
+	-in serverkeys/server-csr.pem -out serverkeys/server-ca-cert.pem 2> /dev/null
 
 server-csr.pem:
-	openssl req -new -key serverkeys/server-key.pem -out serverkeys/server-csr.pem -nodes -subj '/CN=server\.example\.com/'
+	openssl req -new -key serverkeys/server-key.pem -out serverkeys/server-csr.pem \
+	-nodes -subj '/CN=server\.example\.com/' 2> /dev/null
 
 server-key.pem:
-	openssl genrsa -out serverkeys/server-key.pem
+	openssl genrsa -out serverkeys/server-key.pem 2> /dev/null
 
 copyfiles:
 	cp ttpkeys/ca-cert.pem clientkeys/
