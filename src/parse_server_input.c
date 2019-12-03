@@ -65,7 +65,6 @@ server_parsed_t *parse_server_input(packet_t *p) {
   }
   /* if an error during parsing occurs, the parse struct is freed */
   if (ret < 0) {
-    printf("server parsed ret: %d\n", ret);
     free_server_parsed(parsed);
     return NULL;
   }
@@ -222,7 +221,7 @@ int parse_server_msg(packet_t *packet, server_parsed_t *parsed) {
   memcpy(parsed->messages.message, tmp, parsed->messages.msglen);
   parsed->messages.message[parsed->messages.msglen] = '\0';
   tmp += parsed->messages.msglen;
-  
+
   /* Now only private messages have more input. This is checked here */
   if (parsed->id == S_MSG_PRIVMSG) {
     /* input the recipient into the appropriate variable. This field has a constant

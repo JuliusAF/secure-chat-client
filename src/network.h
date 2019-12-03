@@ -8,14 +8,18 @@
 
 /* maximum size for rsa signature*/
 #define MAX_SIG_SZ 256
+
 /* defines fixed size of header*/
 #define HEADER_SIZE (sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint32_t) + MAX_SIG_SZ)
+
 /* The limit here is reasonably higher than what is needed, but
 is defined to ensure a benchmark for packet size */
 #define MAX_PACKET_SIZE 6144
 #define MAX_PAYLOAD_SIZE (MAX_PACKET_SIZE - HEADER_SIZE)
+
 /* a login request has a fixed size defined here */
 #define LOGIN_REQUEST_SIZE USERNAME_MAX + SHA256_DIGEST_LENGTH
+
 /* defines the payload for a user request. Used to create signature and is
 a constant as a user command requires no information from the client */
 #define USERS_MSG_PAYLOAD "client users request"
@@ -55,10 +59,12 @@ typedef struct packet_to_send {
   unsigned char *payload;
 } packet_t;
 
+/* functions to create/connect to a socket */
 int create_server_socket(unsigned short port);
 int client_connect(const char *hostname, unsigned short port);
 int accept_connection(int serverfd);
 
+/* functions that form the basis of the network communication */
 int send_packet_over_socket(SSL *ssl, int fd, packet_t *p);
 int read_packet_from_socket(SSL *ssl, int fd, unsigned char *buffer);
 bool is_packet_legal(packet_t *p);

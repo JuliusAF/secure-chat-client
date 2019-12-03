@@ -28,16 +28,16 @@ typedef struct parsed_client_input {
       unsigned char *hash_password;
     } log_packet;
     /* a public message contains the actual message, as well as the signature
-    that signed the packet. The public key is discarded as the server already has
-    a copy of it */
+    that signed the packet. The certificate and sender is discarded as the server already has
+    this information */
     struct {
       unsigned int siglen;
       unsigned char *sig;
       unsigned int msg_sz;
       char *message;
     } pubmsg_packet;
-    /* a request for another users public key also includes the encrypted message and iv to make
-    responding to the return message on the client side easier. saves  */
+    /* a request for another users certificate also includes the sender, encrypted message and iv to make
+    responding to the return message on the client side easier */
     struct {
       unsigned int siglen;
       unsigned char *sig;

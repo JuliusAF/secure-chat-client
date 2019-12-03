@@ -7,8 +7,7 @@
 #include "parse_client_input.h"
 #include "database_utilities.h"
 
-/* functions for the initialization of structs defined in this header and for
-the database*/
+/* functions for the initialization and opening of the database*/
 sqlite3 *open_database(void);
 int initialize_database(void);
 
@@ -21,6 +20,7 @@ int handle_db_privmsg(client_parsed_t *parsed, client_t *client_info, char *erro
 int handle_db_pubmsg(client_parsed_t *parsed, client_t *client_info);
 int handle_db_users(client_t *client_info);
 int handle_db_exit(client_t *client_info);
+
  /* functions that deal with fetching information from the database to send
  to the client later */
 fetched_userinfo_t *fetch_db_user_info(client_t *client_info);

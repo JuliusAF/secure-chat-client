@@ -162,8 +162,11 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
 			}
 
       packet = deserialize_packet(input, bytes_read);
-      if (packet == NULL)
+      if (packet == NULL) {
+        packet_t *packet1 = gen_s_error_packet(S_MSG_GENERIC_ERR, "couldn't read data from client");
+        send_packet_over_socket(ssl, connfd, packet1);
         goto cleanup;
+      }
 
       /* check that a login condition is satisfies and if it is check the signature of
       a packet for all appropriate instances */
@@ -181,8 +184,8 @@ void worker(int connfd, int from_parent[2], int to_parent[2]) {
       /* parse a packet */
       parsed = parse_client_input(packet);
       if (parsed == NULL) {
-        packet = gen_s_error_packet(S_MSG_GENERIC_ERR, "couldn't process request");
-        send_packet_over_socket(ssl, connfd, packet);
+        packet_t *packet1 = gen_s_error_packet(S_MSG_GENERIC_ERR, "couldn't process request");
+        send_packet_over_socket(ssl, connfd, packet1);
         goto cleanup;
       }
 

@@ -27,11 +27,11 @@ typedef struct parsed_server_input {
     currently logged in, delimited with a space */
     char *users;
     /* Both public and private messages are similarly structured as packets. As such,
-    they will share the same struct. Private messages simple have more fields to them.
-    A public message contains the signature of the original message, the public
-    key of the user that sent it, and the actual message. The hash of the original payload,
+    they will share the same struct. Private messages simply have more fields to them.
+    A public message contains the signature of the original message, the certificate
+    of the user that sent it, the sender, and the actual message. The hash of the original payload,
     that is the hash of the packet after the signature (length and actual signature) is
-    also saved. This hash will be used to verify that the client who claims they send the
+    also saved. This hash will be used to verify that the client who claims they sent the
     message actually did so */
     struct {
       /* fields shared by both types of messages */

@@ -75,6 +75,8 @@ int main(int argc, const char* argv[]) {
     int err = SSL_get_verify_result(ssl);
 		if (err == 0)
 			printf("Server has reached the maximum number of clients\n");
+		else
+			fprintf(stderr, "failed to set up secure connection to server\n");
     exit(EXIT_FAILURE);
   }
 	/* initializes the structs used to store user information client side */
@@ -132,12 +134,16 @@ int main(int argc, const char* argv[]) {
 				break;
 			}
 			packet = deserialize_packet(server_output, bytes_read);
-			if (packet == NULL)
+			if (packet == NULL) {
+				fprintf(stderr, "failed to obtain packet from server\n");
 				goto cleanup;
-				
+			}
+
 			parsed = parse_server_input(packet);
-			if (parsed == NULL)
+			if (parsed == NULL) {
+				fprintf(stderr, "failed to parse server output\n");
 				goto cleanup;
+			}
 
 			handle_server_input(parsed, user, request);
 

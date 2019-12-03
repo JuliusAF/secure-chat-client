@@ -315,7 +315,7 @@ int parse_client_privmsg(packet_t *packet, client_parsed_t *parsed) {
   memcpy(parsed->privmsg_packet.sig, packet->header->sig, parsed->privmsg_packet.siglen);
   parsed->privmsg_packet.sig[parsed->privmsg_packet.siglen] = '\0';
 
-  /* read the size of the key and skip over it. It is not needed on the server side */
+  /* read the size of the certificate and skip over it. It is not needed on the server side */
   if ((tmp + sizeof(unsigned int)) > tmpend)
     return -1;
   memcpy(&certlen, tmp, sizeof(unsigned int));

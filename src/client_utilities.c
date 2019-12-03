@@ -127,14 +127,17 @@ bool verify_client_payload(char *cert, unsigned int certlen, char* sender,
 	if (cert == NULL || sender == NULL || s == NULL || hash == NULL)
 		return false;
 
+	/* verify authenticity of certificate*/
 	ret = verify_x509_certificate(cert, certlen, sender);
 	if (!ret)
 		return false;
 
+	/* obtains public key from certificate */
 	pubkey = obtain_pubkey_from_x509(cert, certlen, &publen);
 	if (pubkey == NULL)
 		return false;
 
+	/* places public key into an EVP_PKEY structure and verifies the signature with it */
 	bio = BIO_new_mem_buf(pubkey, publen);
 	if (bio == NULL)
 		return false;
@@ -208,9 +211,12 @@ void handle_user_register(command_t *node, user_t *user, request_t *request) {
 	memcpy(request->masterkey, masterkey, MASTER_KEY_LEN+1);
 	free(masterkey);
 
+	/* generate the packet to send */
 	packet = gen_c_register_packet(node, request);
-	if (packet == NULL)
+	if (packet == NULL) {
+		fprintf(stderr, "failed to create packet\n");
 		return;
+	}
 
 	/* if there were no errors, the register request was successfully sent to
 	the server */
@@ -250,8 +256,10 @@ void handle_user_login(command_t *node, user_t *user, request_t *request) {
 	free(masterkey);
 
 	packet = gen_c_login_packet(node);
-	if (packet == NULL)
+	if (packet == NULL) {
+		fprintf(stderr, "failed to create packet\n");
 		return;
+	}
 
 	/* if there were no errors, the register request was successfully sent to
 	the server */
@@ -276,8 +284,10 @@ void handle_user_users(command_t *node, user_t *user) {
 	}
 
 	packet = gen_c_users_packet(node);
-	if (packet == NULL)
+	if (packet == NULL) {
+		fprintf(stderr, "failed to create packet\n");
 		return;
+	}
 
 	sign_client_packet(packet, user);
 	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
@@ -298,8 +308,10 @@ void handle_user_pubmsg(command_t *node, user_t *user) {
 	}
 
 	packet = gen_c_pubmsg_packet(node, user);
-	if (packet == NULL)
+	if (packet == NULL) {
+		fprintf(stderr, "failed to create packet\n");
 		return;
+	}
 
 	sign_client_packet(packet, user);
 	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
@@ -325,8 +337,10 @@ void handle_user_privmsg(command_t *node, user_t *user) {
 	}
 
 	packet = gen_c_pubkey_rqst_packet(node, user);
-	if (packet == NULL)
+	if (packet == NULL) {
+		fprintf(stderr, "failed to create packet\n");
 		return;
+	}
 
 	sign_client_packet(packet, user);
 	ret = send_packet_over_socket(user->ssl, user->connfd, packet);
@@ -368,6 +382,12 @@ void handle_server_input(server_parsed_t *p, user_t *u, request_t *r) {
       break;
     case S_MSG_GENERIC_ERR:
 			print_error(p->error_message);
+			/* if an error is returned from a login request, it must be reset */
+			if (r->is_request_active) {
+				r->is_request_active = false;
+				memset(r->username, '\0', USERNAME_MAX+1);
+				memset(r->masterkey, '\0', MASTER_KEY_LEN+1);
+			}
       break;
     case S_META_LOGIN_PASS:
 			handle_server_log_pass(p, u, r);
@@ -408,8 +428,8 @@ void handle_server_users(server_parsed_t *p, user_t *u) {
 	}
 }
 
-/* verifies that the author of a public message matches the provided public key,
-and if it does prints the message to the interface */
+/* verifies that the author of a public message matches the provided public key
+from the certificate and if it does prints the message to the interface */
 void handle_server_pubmsg(server_parsed_t *p, user_t *u) {
 	if (u == NULL)
 		return;
@@ -424,9 +444,9 @@ void handle_server_pubmsg(server_parsed_t *p, user_t *u) {
 	write(STDOUT_FILENO, "\n", 1);
 }
 
-/* handles a server response to a previous public key request. This function decrypts the message
+/* handles a server response to a previous certificate request. This function decrypts the message
 associated with the request, reencrypts it for both itself and the recipient, and sends the message
-back to the server */
+back to the server. That step is done in the gen_c_privmsg_packet() function */
 void handle_server_pubkey_response(server_parsed_t *p, user_t *u) {
 	bool verified;
 	int ret;
@@ -445,8 +465,10 @@ void handle_server_pubkey_response(server_parsed_t *p, user_t *u) {
 
 	/* the encryption of the message is done in this function and the ones it calls */
 	packet = gen_c_privmsg_packet(p, u);
-	if (packet == NULL)
+	if (packet == NULL) {
+		fprintf(stderr, "failed to create packet\n");
 		return;
+	}
 
 
 	sign_client_packet(packet, u);
@@ -486,15 +508,19 @@ void handle_server_privmsg(server_parsed_t *p, user_t *u) {
 	/* use the private key to decrypt the selected encrypted symmetric key */
 	decrypted_keylen = apply_rsa_decrypt(u->rsa_keys->privkey, u->rsa_keys->privlen, encrypted_keylen,
 																			encrypted_key, decrypted_key);
-	if (decrypted_keylen < 0)
+	if (decrypted_keylen < 0) {
+		fprintf(stderr, "failed to decrypt key\n");
 		return;
+	}
 	decrypted_key[decrypted_keylen] = '\0';
 
 	/* decrypt the encrypted message using the IV and the now decrypted symmetric key */
 	decrypted_msglen = apply_aes( (unsigned char *) decrypted_msg, p->messages.message, p->messages.msglen,
 															 decrypted_key, p->messages.iv, DECRYPT);
-	if (decrypted_msglen < 0)
+	if (decrypted_msglen < 0) {
+		fprintf(stderr, "failed to decrypt private message\n");
 		return;
+	}
 	decrypted_msg[decrypted_msglen] = '\0';
 
 	/* writes the message to stout */
@@ -535,8 +561,10 @@ void handle_server_log_pass(server_parsed_t *p, user_t *u, request_t *r) {
 	}
 
 	keys = deserialize_keypair(decrypted_keys, decrypt_sz);
-	if (keys == NULL)
+	if (keys == NULL) {
+		fprintf(stderr, "failed to obtain user keys\n");
 		return;
+	}
 
 	/* copies the necessary fields into the user info struct */
 	memcpy(u->username, r->username, USERNAME_MAX);

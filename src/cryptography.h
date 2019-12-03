@@ -13,7 +13,7 @@
 /* size of the init vector passed to the AES algorithm*/
 #define IV_SIZE 16
 
-/* size of a symmetric key for private message encryption */
+/* size of a symmetric key for AES encryption */
 #define SYMKEY_SIZE 16
 
 /* size of the salt used for hashing passwords from clients */
@@ -26,7 +26,7 @@
 when an ssl connection is established*/
 #define SERVER_COMMON_NAME "server.example.com"
 
-/* struct to hold a rsa key pair in memory */
+/* struct to hold a rsa key pair and certificate in memory */
 typedef struct rsa_keypairs {
   unsigned int privlen;
   unsigned int publen;
@@ -41,10 +41,12 @@ unsigned char *create_rand_salt(unsigned int size);
 unsigned char *hash_password(char *input, unsigned int size, unsigned char *salt, unsigned int salt_size);
 unsigned char *hash_input(char *input, unsigned int size);
 unsigned char *gen_master_key(char *username, char *password);
+
 /* functions for the keypair_t struct */
 keypair_t *create_rsa_pair(char *username);
 bool is_keypair_legal(keypair_t *k);
 void free_keypair(keypair_t *k);
+
 /* functions for creating/using an X509 certificate */
 char *gen_hex_of_username_hash(char *username);
 int execute_ttp_script(char *username);
@@ -56,9 +58,11 @@ bool verify_x509_certificate(char *cert, unsigned int certlen, char *username);
 /* function to apply AES-128-CBC to an input with the provided salt and initialization vector */
 int apply_aes(unsigned char *output, unsigned char *input, int size,
               unsigned char *key, unsigned char *iv, int enc);
+
 /* functions for signature creation and verification */
 unsigned int rsa_sign_sha256(EVP_PKEY *key, unsigned char *output, unsigned char* input, unsigned int inlen);
 bool rsa_verify_sha256(EVP_PKEY *key, unsigned char *s, unsigned char *i, unsigned int slen, unsigned int ilen);
+
 /* functions for RSA encryption and decryption */
 int apply_rsa_encrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigned char *in, unsigned char *out);
 int apply_rsa_decrypt(char *pkey, unsigned int plen, unsigned int inlen, unsigned char *in, unsigned char *out);

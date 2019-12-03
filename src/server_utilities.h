@@ -8,11 +8,12 @@
 
 /* defines the maximum number of clients that can connect to the server*/
 #define MAX_CLIENTS 30
+
 /* The server and workers communicate over the pipes.
 The communication between them, however, is very simple and
 there is no need for elaborate messages. The workers tell the server
 if their connection ended with "C" and the worker tells the server,
-and vice versa, if the database has updated.*/
+and vice versa, if the database has updated with "U". */
 #define PIPE_MSG_UPDATE "U"
 #define PIPE_MSG_CLOSE "C"
 #define PIPE_MSG_LEN 1

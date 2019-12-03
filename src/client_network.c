@@ -51,7 +51,7 @@ unsigned char *serialize_keypair(keypair_t *k, int size) {
   return serialized;
 }
 
-/* converts a byte stream containing the key pair back into a keypair_t struct.
+/* converts a byte stream containing the key pair and certificate back into a keypair_t struct.
 The format of the bytes is privlen, privkey, publen, pubkey, certlen, cert */
 keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
   unsigned char *tmp, *tmpend;
@@ -60,6 +60,7 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
   if (serialized == NULL ||size < 0)
     return NULL;
 
+  /* allocate and initializes the key pair variables */
   keypair = safe_malloc(sizeof *keypair);
   if (keypair == NULL)
     return NULL;
@@ -112,6 +113,7 @@ keypair_t *deserialize_keypair(unsigned char *serialized, int size) {
   memcpy(&keypair->certlen, tmp, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
 
+  /* copy certificate */
   if ((tmp + keypair->certlen) > tmpend) {
     free_keypair(keypair);
     return NULL;
@@ -143,11 +145,13 @@ unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypai
       masterkey == NULL)
     return NULL;
 
+  /* calculates the size of the keypair and serializes them */
   keypair_sz = (sizeof(int)*3) + k->privlen + k->publen + k->certlen;
   serial_keys = serialize_keypair(k, keypair_sz);
   if (serial_keys == NULL)
     return NULL;
 
+  /* creates the iv and encrypts the keys and certificate*/
   iv = create_rand_salt(IV_SIZE);
   if (iv == NULL) {
     error = true;
@@ -159,12 +163,14 @@ unsigned char *serialize_register(command_t *n, unsigned char *masterkey, keypai
     goto cleanup;
   }
 
+  /* hashes the password */
   hashed_pass = hash_password(n->acc_details.password, strlen(n->acc_details.password), NULL, 0);
   if (hashed_pass == NULL) {
     error = true;
     goto cleanup;
   }
 
+  /* calculates finals payload size and stores it in the size argument provided to the function */
   payload_sz = USERNAME_MAX + SHA256_DIGEST_LENGTH + sizeof(int) + k->certlen +
                IV_SIZE + sizeof(int) + encrypted_sz;
   *size = payload_sz;
@@ -297,7 +303,7 @@ packet_t *gen_c_login_packet(command_t *n) {
 }
 
 /* creates a packet for the users command. The payload contents and size is
-constant, and utilized solely to sign the packet from the server side */
+constant, and utilized solely to sign the packet from the client side (verified server side) */
 packet_t *gen_c_users_packet(command_t *n) {
   packet_hdr_t *header = NULL;
   unsigned char *payload = NULL;
@@ -322,13 +328,14 @@ packet_t *gen_c_users_packet(command_t *n) {
   return pack_packet(header, payload);
 }
 
-/* a public message packet's payload is made up of 3 fields. The first is
-the size of the public key, the second is the public key, the third is
-the size of the message, and the fourth is the actual message.
-The reason the public key is added is so that when the
-packet is signed, the signature is a function of the public key, ensuring
+/* a public message packet's payload is made up of 5 fields. The first is
+the size of the certificate, the second is the certificate, the third is
+the username of the sender, the fourth is
+the size of the message, and the fifth is the actual message.
+The reason the certificate is added is so that when the
+packet is signed, the signature is a function of the certificate, ensuring
 that it's the correct one. This is done because every client that receives
-this message must verify the signature with the public key anyway, so it
+this message must verify the signature with the public key from the certificate anyway, so it
 may as well be a necessity in the packet for verification purposes */
 unsigned char *serialize_pubmsg(char *message, user_t *u, unsigned int payload_sz) {
   unsigned int s;
@@ -344,6 +351,7 @@ unsigned char *serialize_pubmsg(char *message, user_t *u, unsigned int payload_s
   tmp = payload;
   s = strlen(message);
 
+  /* assigns the fields to the payload */
   memcpy(tmp, &u->rsa_keys->certlen, sizeof(unsigned int));
   tmp += sizeof(unsigned int);
   memcpy(tmp, u->rsa_keys->cert, u->rsa_keys->certlen);
@@ -423,6 +431,7 @@ unsigned char *serialize_pubkey_rqst(command_t *n, user_t *u, unsigned int *payl
 
   tmp = payload;
 
+  /* copies the data into the payload array */
   memset(payload, '\0', *payload_sz);
   memcpy(tmp, n->privmsg.username, strlen(n->privmsg.username));
   tmp += USERNAME_MAX;
@@ -436,8 +445,8 @@ unsigned char *serialize_pubkey_rqst(command_t *n, user_t *u, unsigned int *payl
   return payload;
 }
 
-/* this function creates a public key request. This asks the server to supply the public
-key corresponding to the username mentioned. It includes the encrypted message to send
+/* this function creates a public key request. This asks the server to supply the certificate
+corresponding to the username mentioned. It includes the encrypted message to send
 and the IV used to encrypt it so that the message can send back all of it, and the client
 can process the encryption of the message for the other client without having to specifically
 wait for a return packet */

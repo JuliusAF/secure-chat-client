@@ -148,6 +148,7 @@ keypair_t *create_rsa_pair(char *username) {
     goto cleanup;
   }
 
+  /* generate RSA private key */
   rsa = RSA_new();
   ret = RSA_generate_key_ex(rsa, bits, bignum, NULL);
   if (ret != 1) {
@@ -162,6 +163,7 @@ keypair_t *create_rsa_pair(char *username) {
     goto cleanup;
   }
 
+  /* create the name of the key file with the hash of the username */
   strncat(keypath, username_hash, SHA256_DIGEST_LENGTH*2);
   strcat(keypath, extension);
 
@@ -323,6 +325,7 @@ char *gen_x509_certificate(char *username, unsigned int *outlen) {
   if (username_hash == NULL)
     goto cleanup;
 
+  /* create the file path to the key */
   strncat(certpath, username_hash, SHA256_DIGEST_LENGTH*2);
   strcat(certpath, extension);
 
@@ -359,7 +362,7 @@ char *gen_x509_certificate(char *username, unsigned int *outlen) {
   return certificate;
 }
 
-/* returns a X509 certificate from a certificate stored in memory */
+/* returns an X509 certificate from a certificate stored in memory */
 X509 *get_x509_from_array(char *cert, unsigned int certlen) {
   X509 *certificate = NULL;
   BIO *bio = NULL;
@@ -488,7 +491,7 @@ bool verify_x509_certificate(char *cert, unsigned int certlen, char *username) {
     goto cleanup;
 
   /* compare hash of username with the common name from the certificate */
-  if (strncmp(username_hash, common_name, strlen(username_hash)) != 0)
+  if (strncmp(username_hash, common_name, strnlen(username_hash, SHA256_DIGEST_LENGTH*2)) != 0)
     goto cleanup;
   verified = true;
   cleanup:

@@ -36,9 +36,9 @@ typedef struct messages_components {
   unsigned char *r_symkey;
 } msg_components_t;
 
-/* a queue of message component structs, created and modified when messages a fetched
+/* a queue of message component structs, created and modified when messages are fetched
 from the database. This is returned on success for private and public messages and holds,
-in chronological order, the messages fetched from thr database. */
+in chronological order, the messages fetched from the database. */
 typedef struct msg_qeue {
   unsigned int size;
   unsigned int top;
