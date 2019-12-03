@@ -200,7 +200,7 @@ void handle_user_register(command_t *node, user_t *user, request_t *request) {
 	}
 	 /* inputs data calculated when the command is invoked, like the masterkey and
 	 the username the user entered */
-	strncpy(request->username, node->acc_details.username, strlen(node->acc_details.username));
+	strncpy(request->username, node->acc_details.username, strnlen(node->acc_details.username, USERNAME_MAX+1));
 	masterkey = gen_master_key(node->acc_details.username, node->acc_details.password);
 	if (masterkey == NULL)
 		return;
@@ -241,7 +241,7 @@ void handle_user_login(command_t *node, user_t *user, request_t *request) {
 
 	/* inputs data calculated when the command is invoked, like the masterkey and
 	the username the user entered */
-	strncpy(request->username, node->acc_details.username, strlen(node->acc_details.username));
+	strncpy(request->username, node->acc_details.username, strnlen(node->acc_details.username, USERNAME_MAX+1));
 	masterkey = gen_master_key(node->acc_details.username, node->acc_details.password);
 	if (masterkey == NULL)
 	 return;
@@ -471,7 +471,7 @@ void handle_server_privmsg(server_parsed_t *p, user_t *u) {
 		fprintf(stderr, "author of message doesn't match\n");
 		return;
 	}
-	
+
 	/* check if logged in user is the recipient of the message. If they are, use the recipients
 	symmetric key, otherwise use the senders */
 	if(strncmp(u->username, p->messages.recipient, USERNAME_MAX) == 0) {

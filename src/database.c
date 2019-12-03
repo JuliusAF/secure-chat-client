@@ -492,7 +492,7 @@ int handle_db_pubmsg(client_parsed_t *parsed, client_t *client_info) {
     goto cleanup;
 
   sql = "INSERT INTO MESSAGES VALUES(?1, NULL, ?2, ?3, NULL, NULL, NULL)";
-  
+
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK) {
     sqlite3_bind_text(res, 1, client_info->username, -1, SQLITE_STATIC);
@@ -524,7 +524,7 @@ Returns:
 1 on success
 0 on failure */
 int handle_db_exit(client_t *client_info) {
-  char *sql, name[USERNAME_MAX+1] = "";
+  char *sql;
   int rc, step;
   sqlite3_stmt *res = NULL;
   sqlite3 *db = NULL;
@@ -543,8 +543,7 @@ int handle_db_exit(client_t *client_info) {
   sql = "UPDATE USERS SET STATUS = 0 WHERE USERNAME = ?";
   rc = sqlite3_prepare_v2(db, sql, -1, &res, 0);
   if (rc == SQLITE_OK) {
-    strcpy(name, client_info->username);
-    sqlite3_bind_text(res, 1, name, -1, SQLITE_STATIC);
+    sqlite3_bind_text(res, 1, client_info->username, -1, SQLITE_STATIC);
   }
   else {
     fprintf(stderr, "Failed to prepare statement: %s \n", sqlite3_errmsg(db));
@@ -578,7 +577,7 @@ fetched_userinfo_t *fetch_db_user_info(client_t *client_info) {
   sqlite3 *db = NULL;
 
   if (client_info == NULL || client_info->is_logged == false ||
-      strlen(client_info->username) == 0)
+      strnlen(client_info->username, USERNAME_MAX+1) == 0)
     return NULL;
 
   fetched = safe_malloc(sizeof *fetched);
@@ -643,7 +642,7 @@ msg_queue_t *fetch_db_messages(client_t *client_info) {
   sqlite3 *db = NULL;
 
   if (client_info == NULL || client_info->is_logged == false ||
-      strnlen(client_info->username, USERNAME_MAX) == 0)
+      strnlen(client_info->username, USERNAME_MAX+1) == 0)
     return NULL;
 
   db = open_database();
@@ -702,7 +701,7 @@ null terminated, meaning the size can be found with strlen. The number of maximu
 clients is defined in server_utilities.h, and can be used to control how many
 times step is called. */
 char *fetch_db_users() {
-  const int size = 2000;
+  unsigned int size = 2000;
   char *sql;
   const char *tmp;
   int rc, step, loop;
@@ -733,10 +732,21 @@ char *fetch_db_users() {
 
   step = sqlite3_step(res);
   loop = 0;
+  /* There is a limit of connected clients defined in MAX_CLIENTS */
   while (step == SQLITE_ROW && loop < MAX_CLIENTS) {
     /* ensure the username copied is less than the possible max */
     if ((rc = sqlite3_column_bytes(res, 0)) <= USERNAME_MAX) {
       tmp = (char *) sqlite3_column_text(res, 0);
+      /* check amount of users does not cause buffer overflow. If it does, reallocated memory */
+      if ((strnlen(fetched, size) + sqlite3_column_bytes(res, 0)+1) > size) {
+        fetched = realloc(fetched, size+size * sizeof *fetched);
+        if (fetched == NULL) {
+          sqlite3_finalize(res);
+          sqlite3_close(db);
+          return NULL;
+        }
+        size += size;
+      }
       strncat(fetched, tmp, rc);
       strncat(fetched, " ", 1);
       loop++;
