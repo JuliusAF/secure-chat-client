@@ -150,7 +150,7 @@ The exit command need not be transmitted over the server, although it can be. A 
 
 ### Register command:
 
-When a user invokes the register command, the user provides a username and password. The username stays in the plaintext form that it was submitted. The password is hashed with sha256. In addition to this, the client creates a public/private key pair for the current register request. The server stores a client public key and the encrypted form of both the public and private key. As such, these must be transmitted to the server.
+When a user invokes the register command, the user provides a username and password. The username stays in the plaintext form that it was submitted. The password is hashed with sha256. In addition to this, the client creates a public/private key pair for the current register request. This key pair is encrypted with AES-128-CBC using a master key as described above. The server stores a client certificate and the encrypted form of both the public and private key. As such, these must be transmitted to the server.
 
 The register command requires only one packet be sent from client to server, which is as follows:
 
@@ -158,8 +158,8 @@ The identification for a register command packet from client to server is C_MSG_
 
 - 20 bytes for username
 - 32 bytes for hashed password (sha256)
-- 4 bytes for size of public key
-- variable size for public key
+- 4 bytes for size of certificate
+- variable size for certificate
 - 16 bytes for initialization vector
 - 4 bytes for size of encrypted keys
 - variable size for encrypted keys
@@ -177,26 +177,26 @@ The identification for a login command from the client is C_MSG_LOGIN
 
 ### Private message command:
 
-When a user wants to transmit a private message, they must first ask the server for the recipient's public key. When the client does this, it also sends with it the information it wants to transmit. This is done so that it need not be buffered/saved in memory across commands. The message is formatted client side using create_formatted_msg() in client_network.c. The process is as follows:
+When a user wants to transmit a private message, they must first ask the server for the recipient's public key (transmitted as an X509 certificate). When the client does this, it also sends with it the information it wants to transmit. This is done so that it need not be buffered/saved in memory across commands. The message is formatted client side using create_formatted_msg() in client_network.c. The process is as follows:
 
-Using the master key created at login time, it encrypts the private message with AES-128-CBC (using an initialization vector). This ensures that the server, should it try to, can not decrypt the message. This information, along with the recipient's name whose public key is requested, is sent to the server that processes the request. The return value from the server includes all the information sent from the client, as well as the public key and the signature of the original packet. The order is preserved. The signature can thus be checked by the client to make sure the data it sent over remained unchanged. This request is made with gen_c_pubkey_rqst_packet() in client_network.c.
+Using the master key created at login time, it encrypts the private message with AES-128-CBC (using an initialization vector). This ensures that the server, should it try to, can not decrypt the message. This information, along with the recipient's name whose certificate is requested, is sent to the server that processes the request. The return value from the server includes all the information sent from the client, as well as the certificate and the signature of the original packet. The order is preserved. The signature can thus be checked by the client to make sure the data it sent over remained unchanged. This request is made with gen_c_pubkey_rqst_packet() in client_network.c.
 
 The identification is defined in C_META_PUBKEY_RQST. The makeup of the packet is as follows:
 
 - 20 bytes for the username whose public key is requested
 - 16 bytes for the IV used to encrypt the message
-- 4 bytes for the size of the message
-- variable size for the message
+- 4 bytes for the size of the encrypted message
+- variable size for the encrypted message
 
-In the event of a successful return packet from the server, the client then creates the the private message packet. This entails the decryption of the message (encrypted with the master key), then encrypting it as described in the CRYPTOGRAPHY section. The client's public key is also added to the packet, as it must be transmitted anyway when a message packet is sent from the server to clients for verification pruposes. The private message is created in gen_c_privmsg_packet() in cryptography.c:
+In the event of a successful return packet from the server, the client then creates the the private message packet. This entails the decryption of the message (encrypted with the master key), then encrypting it as described in the CRYPTOGRAPHY section. The client's certificate (i.e the certificate of the sender) is also added to the packet, as it must be transmitted anyway when a message packet is sent from the server to clients for verification purposes. The private message is created in gen_c_privmsg_packet() in cryptography.c:
 
 The identification is C_MSG_PRIVMSG.
 
-- 4 bytes for size of public key
-- variable size for public key
+- 4 bytes for size of the certificate
+- variable size for the certificate
 - 20 bytes for sender of message
 - 4 bytes for the encrypted message size
-- variables size of the message
+- variable size of the message
 - 20 bytes for the username of the recipient
 - 16 bytes for the initialization vector used to encrypt the message
 - 4 bytes for the size of the symmetric key encrypted for the sender
@@ -210,8 +210,8 @@ A public message does not need to be encrypted. The public key of the user who s
 
 The identification code is C_MSG_PUBMSG
 
-- 4 bytes for size of public key
-- variable size for the key
+- 4 bytes for size of the certificate
+- variable size for the certificate
 - 20 bytes for sender of message
 - 4 bytes for the size of the message
 - variable size for the message
@@ -286,13 +286,13 @@ The packet returned contains an error message on why the login failed:
 
 ### Private message command:
 
-When a client requests a public key, the server fetches it and sends it back to the client. It also preserved the original packet sent from the client. As such the makeup is:
+When a client requests a certificate, the server fetches it and sends it back to the client. It also preserves the original packet sent from the client. As such the makeup is:
 
 The identification is S_META_PUBKEY_RESPONSE.
 
-- 4 bytes for size of key
-- Variable size for key
-- 20 bytes for the username whose public key is requested
+- 4 bytes for size of the certificate
+- Variable size for the certificate
+- 20 bytes for the username whose certificate is requested
 - 16 bytes for the IV used to encrypt the message
 - 4 bytes for the size of the message
 - variable size for the message
@@ -305,8 +305,9 @@ The identification code is S_MSG_PRIVMSG.
 
 - 4 bytes for length signature of original packet
 - Variable size for signature
-- 4 bytes for size of public key
-- Variable size for public key
+- 4 bytes for size of certificate
+- Variable size for certificate
+- 20 bytes for the sender of the message
 - 4 bytes for size of message
 - Variable size for message
 - 20 bytes for username of recipient
@@ -327,14 +328,15 @@ The identification code is S_MSG_PUBMSG.
 
 - 4 bytes for length signature of original packet
 - Variable size for signature
-- 4 bytes for size of public key
-- Variable size for public key
+- 4 bytes for size of certificate
+- Variable size for certificate
+- 20 bytes for username of sender
 - 4 bytes for size of message
 - Variable size for message
 
 ### Users command:
 
-A response to a users request is either an error as described above or the list of active users. This list is simply a character array of space delimited names. The list of users is fetched using etch_db_users() in database.c and the packet is created with gen_s_users_packet() in server_network.c. The makeup of the packet is as follows:
+A response to a users request is either an error as described above or the list of active users. This list is simply a character array of space delimited names. The list of users is fetched using fetch_db_users() in database.c and the packet is created with gen_s_users_packet() in server_network.c. The makeup of the packet is as follows:
 
 The identification code is S_MSG_USERS.
 
@@ -344,9 +346,9 @@ The identification code is S_MSG_USERS.
 
 The following security goals have been addressed:
 
-- Private messages are encrypted with end-to-end encryption, and thus Mallory cannot get information about them should she compromise the database.
+- Private messages are encrypted with end-to-end encryption, and thus Mallory cannot get information about them should she compromise the database. The public key of the recipient is wrapped in an X509 certificate, thus validating the authenticity of the public key.
 
-- Signatures are used to verify a client's message, both by the server and by other users. The signature is applied to the entire payload sent by a user, and thus if any aspect of the packet is changed it would be detected. The tries to address the security goal of Mallory not being able to send or modify messages by other users.
+- Signatures are used to verify a client's message, both by the server and by other users. The signature is applied to the entire payload sent by a user, and thus if any aspect of the packet is changed it would be detected. This tries to address the security goal of Mallory not being able to send or modify messages by other users. The signatures are once again checked with public keys obtained from an X509 certificate.
 
 - Passwords are hashed with salts before being stored in the database, and even before storage are hashed on the client side to offer (relatively weak since no salt) protection for the plaintext password. Private keys are encrypted with AES-128-CBC and a random initialization vector. This should provide confidentiality for a user's password and private key.
 
@@ -357,7 +359,7 @@ The following security goals have been addressed:
     - Packets from server to client are parsed in the parse_server_input.c files.
   - The functions in these files, when dealing with memory (such as memcpy()), always check that a read/copy does not exceed the appointed memory.
   - Wherever possible, functions are used that explicitly specify the size of the operation.
-  - There are (as far as I have found) no memory leaks in an active running process. (If the program is killed, some memory is leaked.)
+  - There are (as far as I have found) no memory leaks in an active running process that terminates properly. (If the program is killed, some memory is not freed at termination).
   - Sizes are explicitly checked. The function to read from a socket ensures that the specified data is read. A packet header's payload size is thus ensured to be accurate.
 
-- The programs do not modify any files other than chat.db (for the server) and files in the clientkeys directory. The CA and server certificates are created when make is called.
+- The programs do not modify any files other than chat.db (for the server) and files in the clientkeys directory. The CA and server certificates are created when make is called and copied into other folders such that the certificates can be accessed without breaking the non-functional requirement of not accessing another's folder.
