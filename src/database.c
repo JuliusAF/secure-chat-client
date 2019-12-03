@@ -738,7 +738,7 @@ char *fetch_db_users() {
     if ((rc = sqlite3_column_bytes(res, 0)) <= USERNAME_MAX) {
       tmp = (char *) sqlite3_column_text(res, 0);
       /* check amount of users does not cause buffer overflow. If it does, reallocated memory */
-      if ((strnlen(fetched, size) + sqlite3_column_bytes(res, 0)+1) > size) {
+      if ((strnlen(fetched, size) + sqlite3_column_bytes(res, 0)+2) > size) {
         fetched = realloc(fetched, size+size * sizeof *fetched);
         if (fetched == NULL) {
           sqlite3_finalize(res);
@@ -755,8 +755,8 @@ char *fetch_db_users() {
   }
   /* the loop copies one extra space that is removed here (only if array
   has some input) */
-  if (strlen(fetched) > 0) {
-    fetched[strlen(fetched)-1] = '\0';
+  if (strnlen(fetched, size) > 0) {
+    fetched[strnlen(fetched, size)-1] = '\0';
   }
 
   sqlite3_finalize(res);
@@ -765,7 +765,7 @@ char *fetch_db_users() {
 }
 
 /* fetches the certificate of a user from the database */
-char *fetch_db_pubkey(char *name, unsigned int *fetchlen, char *err) {
+char *fetch_db_certificate(char *name, unsigned int *fetchlen, char *err) {
   const char *tmp;
   int rc, step;
   char *sql, *fetched = NULL;

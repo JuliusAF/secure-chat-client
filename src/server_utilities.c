@@ -305,7 +305,8 @@ void handle_client_input(client_parsed_t *p, client_t *client_info, int pipefd) 
   }
 }
 
-/* handle a login request from the client */
+/* handle a login/register request from the client. They only differ in what is stored in the database,
+and not what is fetched from it. As such, they are both handled here */
 void handle_client_login(client_parsed_t *p, client_t *client_info) {
   int ret;
   uint16_t succ_id = 0, fail_id;
@@ -433,7 +434,7 @@ void handle_client_pubkey_rqst(client_parsed_t *p, client_t *client_info) {
     goto cleanup;
   }
 
-  fetched = fetch_db_pubkey(p->pubkey_rqst.username, &fetchlen, err);
+  fetched = fetch_db_certificate(p->pubkey_rqst.username, &fetchlen, err);
   if (fetched == NULL && strlen(err) != 0) {
     packet = gen_s_error_packet(S_MSG_GENERIC_ERR, err);
     send_packet_over_socket(client_info->ssl, client_info->connfd, packet);
